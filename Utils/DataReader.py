@@ -186,7 +186,7 @@ class ViconReader:
     N_HEADER = 3
     N_TITLE = 2
     N_SPACE = 1
-    NON_SUBJECTS = ["Racket1", "Racket2", "Table", "Wall"]
+    NON_SUBJECTS = ["Racket1a", "Racket1", "Racket2", "Table", "Wall"]
 
     SEGMENTS_IDX = [
         "L_Collar",
@@ -439,5 +439,5 @@ if __name__ == '__main__':
 
 
     reader = C3dReader(obj, sub)
-    # data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.c3d")
+    data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.c3d")
     # data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Pilot\\Ball\\BallTest08.c3d")
