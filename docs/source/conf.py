@@ -1,6 +1,4 @@
-import os
-import sys
-sys.path.insert(0, os.path.abspath('../..'))
+
 # Configuration file for the Sphinx documentation builder.
 
 # -- Project information
@@ -24,6 +22,7 @@ intersphinx_mapping = {
     'python': ('https://docs.python.org/3/', None),
     'sphinx': ('https://www.sphinx-doc.org/en/master/', None),
 }
+autodoc_mock_imports = ['Utils']
 intersphinx_disabled_domains = ['std']
 
 templates_path = ['_templates']
