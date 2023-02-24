@@ -28,7 +28,8 @@ def findValleys(dist:np.array, th_c:float, th_d:float) -> np.array:
 
 
 def groupValleys(v:np.array, dist:np.array, within_th:int=10, n_group=(1, 4))-> np.array:
-    '''
+
+    """
     Valley detection algorithm to finds multiple valley.
     Group collections of valleys that are very near (within threshold) and we take the min index
 
@@ -37,7 +38,7 @@ def groupValleys(v:np.array, dist:np.array, within_th:int=10, n_group=(1, 4))-> 
     :param within_th: the within threshold
     :param n_group:
     :return: grouped valleys index
-    '''
+    """
 
     # initialize output
     output = np.empty(0)

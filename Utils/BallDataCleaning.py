@@ -10,6 +10,11 @@ from Utils.Lib import movingAverage, interPolateDistance
 
 from scipy.interpolate import interp1d
 class BallFinding:
+    '''
+    A class that contains functions to find and clean (interpolate and extrapolate) ball trajectories.
+    Since the unlabelled trajectories can be not only ball, but also Tobii reflection of other things.
+    We need to filter out unlabelled data oustide the region of interest (wall and table) and data near Tobii glasses
+    '''
     # relocated table
     ball_area = np.array([
         [-749.966797, -1017.712341, 726.281189],  # table pt1_x - 60, table pt1_y - 1500, table pt1_z
