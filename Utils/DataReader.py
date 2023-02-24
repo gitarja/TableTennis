@@ -9,7 +9,7 @@ from scipy.spatial import Delaunay
 import transforms3d
 from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
-from Utils.Interpolate import extrap1d
+
 
 from numpy.lib import stride_tricks
 
@@ -315,7 +315,7 @@ class ViconReader:
             n_title     = 2 (joints, segments, trajectories)
             n_space     = 1
             '''
-
+            csv_reader = csv_reader[1:]
             n_data = int((len(csv_reader) - (self.N_HEADER * 3 + self.N_TITLE * 3 + self.N_SPACE * 3)) / 3)
             # joints
             i_joint = self.N_HEADER + self.N_TITLE
