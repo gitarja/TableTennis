@@ -9,12 +9,25 @@ from scipy.spatial import Delaunay
 import transforms3d
 from scipy.interpolate import interp1d
 from scipy.interpolate import InterpolatedUnivariateSpline
-
+import pickle
 
 from numpy.lib import stride_tricks
 
 
 import ezc3d
+
+
+class BallReader:
+
+
+    def __init__(self):
+        self.data = None
+
+
+    def extractData(self, path=None):
+        self.data = pd.read_csv(path)
+        return self.data.values
+
 
 class Object:
     def __init__(self):
@@ -23,6 +36,13 @@ class Object:
         self.trajectories = []
 
 
+class SubjectObjectReader:
+
+    def extractData(self, path=None):
+        with open(path, 'rb') as f:
+            list = pickle.load(f)
+
+            return list[0], list[1]
 
 class TobiiReader:
 
@@ -62,11 +82,11 @@ class TobiiReader:
 
 
         start_events_idx = low_high_idx[start_stop_idx[0]][0]
-        stop_events_idx = low_high_idx[start_stop_idx[-1]][0]
+        stop_events_idx = low_high_idx[start_stop_idx[-1]][0] + 1
 
-        data_cut = data.iloc[start_events_idx:stop_events_idx] # take the data from the start event
+        data_cut = data.iloc[start_events_idx:stop_events_idx].copy(deep=True) # take the data from the start event
         start_time = datetime.datetime.strptime(data_cut.iloc[0]["Recording date"] + " " + data_cut.iloc[0]["Recording start time"], "%m/%d/%Y %H:%M:%S.%f").timestamp()
-        data_cut.loc[:]["Timestamp"] = start_time + (data_cut["Recording timestamp"].values / 1e+6)# timestamp is in microsecond
+        data_cut.loc[:, "Timestamp"] = start_time + (data_cut["Recording timestamp"].values / 1e+6)# timestamp is in microsecond
 
         eye_data = data_cut[(data_cut.Sensor != data_cut.Sensor) | (data_cut.Sensor == "Eye Tracker")]
         # gyro_data = data[(data.Sensor == "Gyroscope")]
@@ -74,15 +94,15 @@ class TobiiReader:
 
 
     def normalizeData(self, eye_data:list):
-        # low_index = [np.argwhere(d["Event"].values == "SyncPortInLow") for d in eye_data]
-        #
-        # end_point_idx = np.max([lw[np.argwhere(lw > 10000)[0][0]] for lw in low_index])
-        # end_point_sub_idx = np.argmax([lw[np.argwhere(lw > 10000)[0][0]] for lw in low_index])
+        low_index = [np.argwhere(d["Event"].values == "SyncPortInLow") for d in eye_data]
 
-
-
+        end_point_idx = np.max([lw[np.argwhere(lw > 10000)[0][0]] for lw in low_index])
+        end_point_sub_idx = np.argmax([lw[np.argwhere(lw > 10000)[0][0]] for lw in low_index])
 
         clean_ref_data = eye_data[end_point_sub_idx][:end_point_idx]
+
+
+
 
         eye_data = [e[e.Sensor == "Eye Tracker"]for e in eye_data]
         # selected columns
@@ -103,14 +123,11 @@ class TobiiReader:
         # gyro_selected_columns = ["Gyro X",
         #     "Gyro Z", "Gyro Y"]
 
-        time_stamp = []
-        gaze_info = []
-        gyro_info = []
-        for idx in range(len(clean_ref_data) - 1):
-            start_time = clean_ref_data.iloc[idx]["Timestamp"]
-            end_time =  clean_ref_data.iloc[idx]["Timestamp"] + .2
-            time_stamp.append(start_time)
-            gaze_info.append([d[(d["Timestamp"] >= start_time) & (d["Timestamp"] <= start_time + .1)][selected_columns].iloc[0].values for d in eye_data])
+        time_stamp = eye_data[0]["Timestamp"].values
+        gaze_info = [d[selected_columns].values for d in eye_data]
+
+
+
 
         gaze_info = np.array(gaze_info).transpose((1, 2, 0))
 
@@ -119,7 +136,7 @@ class TobiiReader:
                 gaze_info[i][j] = self.interPolate(gaze_info[i][j])
 
 
-        clean_gaze = gaze_info.transpose((2, 0, 1)).tolist()
+        clean_gaze = gaze_info.transpose((0, 2, 1)).tolist()
 
         clean_data = pd.DataFrame({"Timestamp": time_stamp, "Gaze": clean_gaze})
 
@@ -186,6 +203,7 @@ class ViconReader:
     N_HEADER = 3
     N_TITLE = 2
     N_SPACE = 1
+    N_OFFSET = 0
     NON_SUBJECTS = ["Racket1a", "Racket1", "Racket2", "Table", "Wall"]
 
     SEGMENTS_IDX = [
@@ -315,27 +333,27 @@ class ViconReader:
             n_title     = 2 (joints, segments, trajectories)
             n_space     = 1
             '''
-            csv_reader = csv_reader[1:]
+            # csv_reader = csv_reader[2:]
             n_data = int((len(csv_reader) - (self.N_HEADER * 3 + self.N_TITLE * 3 + self.N_SPACE * 3)) / 3)
             # joints
-            i_joint = self.N_HEADER + self.N_TITLE
-            joints_header = csv_reader[self.N_HEADER- 1:self.N_HEADER+1]
-            joints_data = self.createArray(csv_reader[i_joint:i_joint+n_data])
+            i_joint = self.N_HEADER + self.N_TITLE + self.N_SPACE
+            joints_header = csv_reader[self.N_SPACE + self.N_HEADER- 1:self.N_SPACE + self.N_HEADER+1]
+            joints_data = self.createArray(csv_reader[i_joint + self.N_OFFSET:i_joint+n_data])
             aug_header_joints = self.augmentHeader(joints_header[0], joints_header[1])
 
             # get objects name
             obj_names = self.getObjectsName(joints_header[0])
 
             # segments
-            i_segment = 2 * (self.N_HEADER + self.N_TITLE) + self.N_SPACE + n_data
+            i_segment = 2 * (self.N_HEADER + self.N_TITLE + self.N_SPACE)  + n_data
             segments_header = csv_reader[i_segment-self.N_HEADER:i_segment-self.N_HEADER+2]
-            segments_data = self.createArray(csv_reader[i_segment:i_segment+n_data])
+            segments_data = self.createArray(csv_reader[i_segment + self.N_OFFSET:i_segment+n_data])
             aug_header_segments = self.augmentHeader(segments_header[0], segments_header[1])
 
             # trajectories
-            i_trajectories = 3 * (self.N_HEADER + self.N_TITLE) + 2 *  (self.N_SPACE +  n_data)
+            i_trajectories = 3 * (self.N_HEADER + self.N_TITLE + self.N_SPACE) + 2 *  ( +  n_data)
             trajectories_header =  csv_reader[i_trajectories-self.N_HEADER:i_trajectories-self.N_HEADER+2]
-            trajectories_data = self.createArray(csv_reader[i_trajectories:i_trajectories+n_data])
+            trajectories_data = self.createArray(csv_reader[i_trajectories + self.N_OFFSET:i_trajectories+n_data])
             aug_header_trajectories = self.augmentHeader(trajectories_header[0], trajectories_header[1])
 
 
@@ -427,17 +445,22 @@ if __name__ == '__main__':
     # data = reader.extractData(ecg_files)
     # print(data)
 
-    # reader = TobiiReader()
+    reader = TobiiReader()
+    tobii_filess = ["F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\Compiled\\SE001B_Tobii.tsv",
+                    "F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\Compiled\\SE001C_Tobii.tsv"]
+    data = reader.extractData(tobii_filess)
+    print(data)
+
     # ecg_files = ["F:\\users\\prasetia\\data\\TableTennis\\Experiments\\08.11.2022-afternoon\\Tobii\\Data Export - 08-11-2022-afternoo\\08-11-2022-afternoo Recording 1 (2).tsv",
     #              "F:\\users\\prasetia\\data\\TableTennis\\Experiments\\08.11.2022-afternoon\\Tobii\\Data Export - 08-11-2022-afternoo\\08-11-2022-afternoo Recording 1 (3).tsv"]
     # data = reader.extractData(ecg_files)
     # print(data)
 
 
-    reader = ViconReader()
-    obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.csv")
-
-
-    reader = C3dReader(obj, sub)
-    data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.c3d")
+    # reader = ViconReader()
+    # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.csv")
+    #
+    #
+    # reader = C3dReader(obj, sub)
+    # data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\T01.c3d")
     # data = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Pilot\\Ball\\BallTest08.c3d")

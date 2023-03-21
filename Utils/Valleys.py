@@ -45,6 +45,7 @@ def groupValleys(v:np.array, dist:np.array, within_th:int=10, n_group=(1, 4))-> 
 
     # pad array
     v = np.pad(v, 2, mode="edge")
+    v = np.unique(np.sort(np.concatenate([v-1,v,v+1])))
     # label groups of sample that belong to the same peak
     valley_groups, num_groups = label(np.diff(v) < within_th)
 

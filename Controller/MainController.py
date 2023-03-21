@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5 import QtWidgets
 import numpy as np
 from PyQt5 import QtCore, QtGui
-from Utils.DataReader import ViconReader, TobiiReader, ECGReader, C3dReader
+from Utils.DataReader import ViconReader, TobiiReader, ECGReader, BallReader, SubjectObjectReader
 from Views.UtilsViewer import showErrorMessage
 import time
 import glob
@@ -31,7 +31,7 @@ class Feeder(QtCore.QThread):
         self.pause = b
 
 
-    def setData(self, sub_data, obj_data, ecg_data, tobii_data, c3d_data):
+    def setData(self, sub_data, obj_data, ecg_data, tobii_data, ball_data):
         self.sub_data = sub_data
         self.racket_2 = None
         self.racket_1 = None
@@ -80,7 +80,7 @@ class Feeder(QtCore.QThread):
 
         self.ecg_data = ecg_data
         self.tobii_data = tobii_data
-        self.c3d_data = c3d_data
+        self.ball_data = ball_data
         self.n_data = len(sub_data[0]["trajectories"])
 
         self.idx_nexus = 0
@@ -88,6 +88,7 @@ class Feeder(QtCore.QThread):
         self.idx_tobii = 0
         vicon_reader = ViconReader()
         self.tobii_reader = TobiiReader()
+
         self.human_segments = [vicon_reader.constructSegments(d["segments"], vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
         self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"]) for d in self.sub_data]
 
@@ -113,11 +114,11 @@ class Feeder(QtCore.QThread):
         table_trajectories = self.table_mean/ 100
         racket1_trajectories = self.racket_1["trajectories"][self.idx_nexus]/ 100
         racket2_trajectories = self.racket_2["trajectories"][self.idx_nexus]/ 100
-        ball_trajectories = self.c3d_data[self.idx_nexus] / 100
+        ball_trajectories = self.ball_data[self.idx_nexus] / 100
         ball_area_trajectories = self.ball_area / 100
         self.human_trajectories_points.emit([human_trajectories, human_segments])
         self.object_trajectories_points.emit([wall_trajectories, table_trajectories, racket1_trajectories, racket2_trajectories])
-        self.ball_trajectories_points.emit(ball_trajectories.tolist())
+        self.ball_trajectories_points.emit(ball_trajectories[1:].tolist())
         self.ballarea_trajectories_points.emit(ball_area_trajectories.tolist())
 
         if self.idx_nexus % 100 == 0:
@@ -130,7 +131,10 @@ class Feeder(QtCore.QThread):
 
         if self.idx_nexus % 2 == 0:
             if self.idx_tobii < len(self.tobii_data):
+                print(self.idx_nexus)
+
                 tobii_segments = np.array([h[15] for h in human_segments])  # 15 is the index of tobii segment
+                print(tobii_segments)
                 # gaze_inf = np.array([np.array(g)[2:17] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
                 gaze_inf = np.array([np.array(g)[2:11] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
                 # tobii_rot = np.array([np.array(h) for h in self.tobii_data.iloc[self.idx_tobii]["Head"]])
@@ -171,9 +175,11 @@ class MainController:
 
         # Reader
         self.vicon_reader = ViconReader()
+        self.obj_reader = SubjectObjectReader()
         self.tobii_reader = TobiiReader()
         self.ecg_reader = ECGReader()
-        self.c3d_reader = C3dReader()
+        self.ball_reader = BallReader()
+        # self.c3d_reader = C3dReader()
 
         # menu action
         self.view.file_menu.triggered.connect(self.showFileDialog)
@@ -222,15 +228,20 @@ class MainController:
 
 
     def openTrial(self, path):
-        nexus_file = glob.glob(path + "\\*_Nexus.csv")
+        nexus_file = glob.glob(path + "\\*_Nexus.pkl")
         ecg_file = glob.glob(path + "\\*_ECG.csv")
         tobii_file = glob.glob(path + "\\*_Tobii.tsv")
-        c3d_file = glob.glob(path + "\\*_C3D.c3d")
+        ball_file = glob.glob(path + "\\*_ball.csv")
+
+        if len(ball_file) < 1:
+            showErrorMessage("Ball file is not found")
+            return
         if len(nexus_file)< 1:
             showErrorMessage("Nexus file is not found")
             return
         else:
-            obj, sub = self.vicon_reader.extractData(nexus_file[0])
+            # obj, sub = self.vicon_reader.extractData(nexus_file[0])
+            obj, sub = self.obj_reader.extractData(nexus_file[0])
             n_sub = len(sub)
             if len(ecg_file) != n_sub:
                 showErrorMessage("Number of ECG files not match with the number of subjects")
@@ -248,8 +259,7 @@ class MainController:
 
             ecg_data = self.ecg_reader.extractData(ecg_files)
             tobii_data = self.tobii_reader.extractData(tobii_files)
-            c3d_data = self.c3d_reader.extractData(c3d_file[0])
-
+            ball_data = self.ball_reader.extractData(ball_file[0])
             self.view.setECGPlot(n_sub, np.array(ecg_data["RR"].values.tolist()).T)
 
             # Activate play button and slider
@@ -258,7 +268,8 @@ class MainController:
             self.view.frame_slider.setValue(0)
             self.view.frame_slider.setRange(0, len(ecg_data))
             # Feeder
-            self.feeder.setData(sub, obj, ecg_data, tobii_data, c3d_data)
+            # there is a 20 ms delay before the UDP is triggered
+            self.feeder.setData(sub, obj, ecg_data, tobii_data, ball_data)
             self.feeder.start()
 
     def run(self):

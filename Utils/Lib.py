@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.ndimage import label
-
+from scipy.interpolate import interp1d
+from numpy import array
 
 def movingAverage(x, n=5):
     def moveAverage(a):
@@ -24,4 +25,36 @@ def interPolateDistance(x):
         # f = interp1d(np.flatnonzero(~mask), np.flatnonzero(~mask), kind="linear")
         # x[mask] = f(np.flatnonzero(mask))
         x[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), x[~mask])
+    return x
+
+
+
+def interExtrapolate(x):
+
+    def extrap1d(interpolator):
+        xs = interpolator.x
+        ys = interpolator.y
+
+        def pointwise(x):
+            if x < xs[0]:
+                return ys[0]
+            elif x > xs[-1]:
+                return ys[-1]
+            else:
+                return interpolator(x)
+
+        def ufunclike(xs):
+            return array(list(map(pointwise, array(xs))))
+
+        return ufunclike
+
+    x_train = np.copy(x)
+    mask = np.isnan(x)
+    f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear", fill_value="extrapolate")
+    f_x = extrap1d(f)
+
+    # fillin the nan values
+    x[mask] = f_x(np.flatnonzero(mask))
+
+
     return x
