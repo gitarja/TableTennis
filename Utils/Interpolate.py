@@ -3,7 +3,7 @@ from scipy.interpolate import interp1d
 from numpy import array
 from statsmodels.tsa.ar_model import AutoReg
 import matplotlib.pyplot as plt
-from Utils.Lib import movingAverage
+from Utils.Lib import movingAverage, savgolFilter
 from scipy.optimize import curve_fit
 
 def interpolate(x: np.array, final: bool =False) -> np.array:
@@ -53,15 +53,24 @@ def interpolate(x: np.array, final: bool =False) -> np.array:
         # if n input is less than 5 we cannot use cubic, not enough data for training. Just use linear and extrapolate the data with extrap1d
         # otherwise only interpolate data with qubic interpolation
         x_train = np.copy(x)
-        if len(x_train) < 5:
-            f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear", fill_value="extrapolate")
+        # if len(x_train) < 5:
+        #     f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear", fill_value="extrapolate")
+        #     f_x = extrap1d(f)
+        # else:
+        #     if not final:
+        #         x_train = movingAverage(x_train, 5)
+        #     f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear", fill_value="extrapolate")
+        #     f_x = baseInter1d(f, default_value=True)
+
+
+        if final:
+            f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear",
+                         fill_value="extrapolate")
             f_x = extrap1d(f)
         else:
-            if not final:
-                x_train = movingAverage(x_train, 5)
+            x_train = movingAverage(x_train, 5)
             f = interp1d(np.flatnonzero(~mask), x_train[~mask], bounds_error=False, kind="linear", fill_value="extrapolate")
             f_x = baseInter1d(f, default_value=True)
-
         # fillin the nan values
         x[mask] = f_x(np.flatnonzero(mask))
 
@@ -86,21 +95,27 @@ def combineEpisode(ori: np.array, ep1: np.array, ep2: np.array, base:float, type
         idx_ep1 = np.argwhere(ep1[:, 2] >= base)[-1][0] + 1
         idx_ep2 = np.argwhere(ep2[:, 2] >= base)[0][0]
 
-    merger_ele = np.empty((len(ori), 2, 3))
+    merger_ele = np.empty((len(ori), 3))
     merger_ele[:] = np.nan
-    merger_ele[:idx_ep1, 0, :] = ep1[:idx_ep1]
-    merger_ele[len(merger_ele) - len(ep2[idx_ep2:]):, 1, :] = ep2[idx_ep2:]
+    merger_ele[:idx_ep1] = ep1[:idx_ep1]
+    if (len(merger_ele) - len(ep1[:idx_ep1])) != 0:
+        merger_ele[idx_ep1:] = ep2[-(len(merger_ele) - len(ep1[:idx_ep1])):]
+    merged_episodes = merger_ele
+    # merger_ele = np.empty((len(ori), 2, 3))
+    # merger_ele[:] = np.nan
+    # merger_ele[:idx_ep1, 0, :] = ep1[:idx_ep1]
+    # merger_ele[len(merger_ele) - len(ep2[idx_ep2:]):, 1, :] = ep2[idx_ep2:]
 
-    conflict_area = np.argwhere(np.sum(np.isnan(np.sum(merger_ele, -1)), -1) == 0)
-    merged_episodes = np.nanmean(merger_ele, 1)
-    for c_idx in conflict_area:
-        if type == 1:
-            pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, [0, 1]] - merged_episodes[c_idx - 1,  [0, 1]], axis=-1))
-        else:
-            pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, [0, 2]] - merged_episodes[c_idx - 1,  [0, 2]], axis=-1))
-        # pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, 1:] - merged_episodes[c_idx-1, 1:], axis=-1))
-        # print(pol_idx)
-        merged_episodes[c_idx] = merger_ele[c_idx, pol_idx]
+    # conflict_area = np.argwhere(np.sum(np.isnan(np.sum(merger_ele, -1)), -1) == 0)
+    # merged_episodes = np.nanmean(merger_ele, 1)
+    # for c_idx in conflict_area:
+    #     if type == 1:
+    #         pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, [0, 1]] - merged_episodes[c_idx - 1,  [0, 1]], axis=-1))
+    #     else:
+    #         pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, [0, 2]] - merged_episodes[c_idx - 1,  [0, 2]], axis=-1))
+    #     # pol_idx = np.argmin(np.linalg.norm(merger_ele[c_idx, :, 1:] - merged_episodes[c_idx-1, 1:], axis=-1))
+    #     # print(pol_idx)
+    #     merged_episodes[c_idx] = merger_ele[c_idx, pol_idx]
 
 
 
@@ -131,11 +146,11 @@ def extrapolateAutoReg(data, idx_first_table=0, idx_ep=1):
 
         # second episode is going down, the others episode is going up
         if idx_ep == 2:
-            model_f = AutoReg(endog=points_f, lags=1, trend="t") # going down
+            model_f = AutoReg(endog=points_f, lags=1, trend="ct") # going down
             model_f_fit = model_f.fit()
 
             points_b = np.flip(points_f)
-            model_b = AutoReg(endog=points_b, lags=1, trend="ct") # going up
+            model_b = AutoReg(endog=points_b, lags=1, trend="t") # going up
             model_b_fit = model_b.fit()
         else:
             model_f = AutoReg(endog=points_f, lags=1, trend="ct")  # going down
@@ -158,8 +173,9 @@ def extrapolateAutoReg(data, idx_first_table=0, idx_ep=1):
                 x[idx] = model_f_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
             #backward extrapolation
             else:
-                end_idx = idx_inv[idx]
-                x[idx] = model_b_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
+                if idx_ep == 1:
+                    end_idx = idx_inv[idx]
+                    x[idx] = model_b_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
 
 
     if idx_first_table != 0:
@@ -223,39 +239,47 @@ def cleanEpisodes(episode, ep1, ep2, ep3, end_ep2_idx, idx_first_table, wall_y, 
     ori_episode = np.copy(episode)
 
     x_inter_e1 = np.array([interpolate(ep1[:, i]) for i in range(3)]).transpose()
-    x_inter_e2 = np.array([interpolate(ep2[:, i]) for i in range(3)]).transpose()
+    x_inter_e2 = ep2
+    if np.sum(~np.isnan(ep2[:, 0])) > 3:
+        x_inter_e2 = np.array([interpolate(ep2[:, i]) for i in range(3)]).transpose()
     x_inter_e3 = np.array([interpolate(ep3[:, i]) for i in range(3)]).transpose()
 
 
 
-    x_inter_e1 = np.array([extrapolateAutoReg(x_inter_e1[:, i], idx_first_table) for i in range(3)]).transpose()
-    x_inter_e2 = np.array([extrapolateAutoReg(x_inter_e2[:, i], idx_ep=2) for i in range(3)]).transpose()
-    x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i]) for i in range(3)]).transpose()
+    x_inter_e1 = np.array([extrapolateAutoReg(x_inter_e1[:, i], idx_first_table, idx_ep=1) for i in range(3)]).transpose()
+    x_inter_e2 = ep2
+    if np.sum(~np.isnan(ep2[:, 0])) > 3:
+        x_inter_e2 = np.array([extrapolateAutoReg(x_inter_e2[:, i], idx_ep=2) for i in range(3)]).transpose()
+    x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=3) for i in range(3)]).transpose()
 
 
     ep12 = combineEpisode(ori=episode[:end_ep2_idx], ep1=x_inter_e1, ep2=x_inter_e2, base=wall_y)
-
+    ep12 = np.array([interpolate(ep12[:, i], final=True) for i in range(3)]).transpose()
 
 
     episode[:end_ep2_idx] = ep12
     ep23 = combineEpisode(ori=episode, ep1=ep12, ep2=x_inter_e3, base=table_z, type=2)
     ep23 = np.array([interpolate(ep23[:, i], final=True) for i in range(3)]).transpose()
-    ep23 = np.array([movingAverage(ep23[:, i], n=2) for i in range(3)]).transpose()
 
-    # if np.std(ep23[:, 0]) < 20:
-    #     ep23[:, 0] = movingAverage(ep23[:, 0], n=11)
+    # apply savgolFilter in the final session
+    ep23 = np.array([savgolFilter(ep23[:, i], n=3) for i in range(3)]).transpose()
+    if np.isnan(np.average(np.abs(np.diff(ep23[:, 0])))):
+        print(str(np.average(np.abs(np.diff(ep23[:, 0])))) + " " + str(np.average(np.abs(np.diff(ep23[:, 1])))) + " " + str(np.average(np.abs(np.diff(ep23[:, 2])))))
+    if np.std(ep23[:, 0]) < 20:
 
-    fig = plt.figure()
-    ax = fig.add_subplot(projection='3d')
+        ep23[:, 0] = savgolFilter(ep23[:, 0], n=5)
 
-    ax.scatter(ori_episode[:, 0], ori_episode[:, 1], ori_episode[:, 2], c="black")
+    # fig = plt.figure()
+    # ax = fig.add_subplot(projection='3d')
     #
+    # ax.scatter(ori_episode[:, 0], ori_episode[:, 1], ori_episode[:, 2], c="black")
+    # #
     # ax.scatter(x_inter_e1[:, 0], x_inter_e1[:, 1], x_inter_e1[:, 2], c="blue")
     # ax.scatter(x_inter_e2[:, 0], x_inter_e2[:, 1], x_inter_e2[:, 2], c="orange")
     # ax.scatter(x_inter_e3[:, 0], x_inter_e3[:, 1], x_inter_e3[:, 2], c="red")
-
-    ax.scatter(ep23[:, 0], ep23[:, 1], ep23[:, 2], c="green")
-    plt.show()
+    #
+    # ax.scatter(ep23[:, 0], ep23[:, 1], ep23[:, 2], c="green")
+    # plt.show()
 
 
     return ep23

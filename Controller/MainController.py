@@ -38,7 +38,7 @@ class Feeder(QtCore.QThread):
         self.wall = None
         self.table = None
         for obj in obj_data:
-            if obj["name"] == 'Racket1':
+            if (obj["name"] == 'Racket1') | (obj["name"] == 'Racket1a'):
                 self.racket_1 = obj
             elif obj["name"] == 'Racket2':
                 self.racket_2 = obj
@@ -118,6 +118,9 @@ class Feeder(QtCore.QThread):
         ball_area_trajectories = self.ball_area / 100
         self.human_trajectories_points.emit([human_trajectories, human_segments])
         self.object_trajectories_points.emit([wall_trajectories, table_trajectories, racket1_trajectories, racket2_trajectories])
+
+        print(self.idx_nexus)
+
         self.ball_trajectories_points.emit(ball_trajectories[1:].tolist())
         self.ballarea_trajectories_points.emit(ball_area_trajectories.tolist())
 
@@ -131,10 +134,10 @@ class Feeder(QtCore.QThread):
 
         if self.idx_nexus % 2 == 0:
             if self.idx_tobii < len(self.tobii_data):
-                print(self.idx_nexus)
+
 
                 tobii_segments = np.array([h[15] for h in human_segments])  # 15 is the index of tobii segment
-                print(tobii_segments)
+                # print(tobii_segments)
                 # gaze_inf = np.array([np.array(g)[2:17] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
                 gaze_inf = np.array([np.array(g)[2:11] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
                 # tobii_rot = np.array([np.array(h) for h in self.tobii_data.iloc[self.idx_tobii]["Head"]])

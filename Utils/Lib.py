@@ -2,6 +2,7 @@ import numpy as np
 from scipy.ndimage import label
 from scipy.interpolate import interp1d
 from numpy import array
+from scipy.signal import savgol_filter
 
 def movingAverage(x, n=5):
     def moveAverage(a):
@@ -18,6 +19,11 @@ def movingAverage(x, n=5):
 
     return x
 
+
+def savgolFilter(x, n=5):
+    x = savgol_filter(x, n, 1)
+
+    return x
 
 def interPolateDistance(x):
     mask = np.isnan(x)

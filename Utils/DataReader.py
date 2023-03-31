@@ -203,7 +203,7 @@ class ViconReader:
     N_HEADER = 3
     N_TITLE = 2
     N_SPACE = 1
-    N_OFFSET = 0
+    N_OFFSET = 28
     NON_SUBJECTS = ["Racket1a", "Racket1", "Racket2", "Table", "Wall"]
 
     SEGMENTS_IDX = [
@@ -313,10 +313,13 @@ class ViconReader:
     def getIndexOf(self, arr:list,obj_name:str):
         return [i for i, x in enumerate(arr) if obj_name in x]
 
-    def extractData(self, file_path: str = None):
+    def extractData(self, file_path: str = None, cleaning=False):
         with open(file_path, mode='r', encoding='utf-8-sig') as file:
 
             csv_reader = list(csv.reader(file))
+
+            if cleaning:
+                self.N_OFFSET = 0
 
             '''
             data structure
