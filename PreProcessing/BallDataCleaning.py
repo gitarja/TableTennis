@@ -622,15 +622,15 @@ if __name__ == '__main__':
     reader = ViconReader()
     # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.30\\T02.csv")
     # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.12.01\\T02.csv")
-    obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.21\\T02.csv", cleaning=True)
+    obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02.csv", cleaning=True)
     # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2023.02.15\\T03.csv")
 
     reader = BallFinding(obj, sub)
     # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.30\\T02.c3d")
     # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.12.01\\T02.c3d")
-    data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.21\\T02.c3d")
+    data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02.c3d")
     # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2023.02.15\\T03.c3d")
 
     df = pd.DataFrame(data, columns=["ball_x", "ball_y", "ball_z"])
-    df.to_csv("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.21\\T02_ball.csv")
+    df.to_csv("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02_ball.csv")
     print(len(data))
