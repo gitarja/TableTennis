@@ -3,15 +3,17 @@ import ezc3d
 import pandas as pd
 from scipy.spatial import Delaunay
 from Utils.Valleys import findValleys, groupValleys, checkValleysSanity
-from Utils.DataReader import ViconReader
+from Utils.DataReader import ViconReader, SubjectObjectReader
 
 from Utils.Interpolate import cleanEpisodes
 from scipy.spatial import distance_matrix
-from Utils.Lib import movingAverage, interPolateDistance
+from Utils.Lib import movingAverage, interPolateDistance, savgolFilter
 import matplotlib.pyplot as plt
 from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from Config.Episodes import EpisodesParamsSingle, EpisodesParamsDouble
+import pickle
+
 
 class BallFinding:
     '''
@@ -62,22 +64,54 @@ class BallFinding:
         tp = self.table_mean.reshape((4, 3))[[0, -1]]
         wp = self.wall_mean.reshape((4, 3))[[0, -1]]
         self.table_area = np.array([
-        [tp[0, 0], tp[0, 1], tp[0, 2]],  # pt1
-        [tp[1, 0], tp[1, 1], tp[1, 2]],  # pt4
-        [wp[0, 0], wp[0, 1], wp[0, 2]],  # pt2'
-        [wp[1, 0], wp[1, 1], wp[1, 2]],  # pt3'
+            [tp[0, 0], tp[0, 1], tp[0, 2]],  # pt1
+            [tp[1, 0], tp[1, 1], tp[1, 2]],  # pt4
+            [tp[0, 0], wp[0, 1], tp[0, 2]],  # pt2'
+            [tp[1, 0], wp[1, 1], tp[1, 2]],  # pt3'
 
-        [tp[0, 0], tp[0, 1], tp[0, 2] + 1000],  # pt1'
-        [tp[1, 0], tp[1, 1], tp[1, 2] + 1000],  # pt4'
-        [wp[0, 0], wp[0, 1], wp[0, 2] + 1000],  # pt2''
-        [wp[1, 0], wp[1, 1], wp[1, 2] + 1000],  # pt3''
+            [tp[0, 0], tp[0, 1], tp[0, 2] + 1000],  # pt1'
+            [tp[1, 0], tp[1, 1], tp[1, 2] + 1000],  # pt4'
+            [tp[0, 0], wp[0, 1], tp[0, 2] + 1000],  # pt2''
+            [tp[1, 0], wp[1, 1], tp[1, 2] + 1000],  # pt3''
 
-    ])  # get yposition of pt1 and p4
+        ])  # get yposition of pt1 and p4
         self.subjects = []
         for s in sub:
             self.subjects.append(s)
 
-    def extrapolateInterpolateBall(self, ball, success_episodes, failure_ep, valleys_w, valleys_t, table, wall, th_t=150, th_failure_extrapolate=400):
+    def constructFailureEpisodes(self, success, failures, wall, table):
+        success_end = success[:, 1]
+        success_start = success[:, 0]
+        failures_episodes = []
+        for f in failures:
+            fs = success_start[success_end == f]
+            if len(fs) > 0:
+                wall_i = wall[(wall > fs[0]) & (wall < f)]
+                table_i = table[(table > fs[0]) & (table < f)]
+                failures_episodes.append([fs[0], f, wall_i[0], table_i[0]])
+
+        return np.asarray(failures_episodes, dtype=int)
+
+    def contructValleyWallTable(self, success, wall, table):
+        wall_idx = []
+        table_idx = []
+
+        for s in success:
+            wall_i = wall[(wall > s[0]) & (wall < s[1])]
+            table_i = table[(table > s[0]) & (table < s[1])]
+
+            if len(table_i) == 2:
+                table_i = table_i[-1:]
+            wall_idx.append(wall_i)
+            table_idx.append(table_i)
+
+        return np.concatenate([success, wall_idx, table_idx], axis=1).astype(int)
+
+
+
+
+    def extrapolateInterpolateBall(self, ball, success_episodes, failure_ep, valleys_w, valleys_t, table, wall,
+                                   th_t=150, th_failure_extrapolate=400):
         '''
         Exxtrapolate and interpolate the success episodes
         :param ball: ball trajectories
@@ -94,7 +128,7 @@ class BallFinding:
 
         for i in range(len(failure_ep) - 1):
             f_now = failure_ep[i]
-            f_next = failure_ep[i+1]
+            f_next = failure_ep[i + 1]
             if (f_next - f_now) <= th_failure_extrapolate:
                 # print(str(f_now) + " " + str(f_next))
                 success_episodes = np.append(success_episodes, np.array([[f_now, f_next]]), axis=0)
@@ -102,7 +136,7 @@ class BallFinding:
         success_episodes = success_episodes[success_episodes[:, 1].argsort()]
         for s in success_episodes:
             print(s)
-            i+=1
+            i += 1
             episode = ball[s[0]:s[1]]
             mask = np.isnan(episode[:, 0])
 
@@ -137,11 +171,6 @@ class BallFinding:
                 if np.isnan(np.sum(episode[idx_valley_w - 1])) & np.isnan(np.sum(episode[idx_valley_w + 1])):
                     episode[idx_valley_w] = np.nan
 
-
-
-
-
-
                 # normalize the position of table valley
                 idx_valley_t = idx_valley_t - s[0]
 
@@ -149,13 +178,12 @@ class BallFinding:
                 # if np.isnan(np.sum(episode[idx_valley_t - 1])) & np.isnan(np.sum(episode[idx_valley_t + 1])):
                 #     episode[idx_valley_t] = np.nan
 
-
                 # mask of episode
                 mask = np.isnan(episode[:, 1])
 
                 # get the value of the valley
-                valley_w = episode[idx_valley_w-1:idx_valley_w+1]
-                valley_t = episode[idx_valley_t-1:idx_valley_t+1]
+                valley_w = episode[idx_valley_w - 1:idx_valley_w + 1]
+                valley_t = episode[idx_valley_t - 1:idx_valley_t + 1]
 
                 e_ep1 = idx_valley_w + 1
                 if np.isnan(np.sum(episode[idx_valley_w + 1])):
@@ -171,7 +199,7 @@ class BallFinding:
                 if np.sum(np.isnan(valley_w)) != 0:
                     bf_valley = np.nonzero(~mask[:idx_valley_w])[0]
                     af_valley = np.nonzero(~mask[idx_valley_w:idx_valley_t])[0]
-                    s_ep2 = bf_valley[np.argmax(bf_valley - idx_valley_w)]  + 1
+                    s_ep2 = bf_valley[np.argmax(bf_valley - idx_valley_w)] + 1
                     e_ep1 = af_valley[np.argmin(af_valley - idx_valley_w)] + idx_valley_w
 
                 # first valley table
@@ -198,7 +226,7 @@ class BallFinding:
 
         return ball
 
-    def filteringUnLabData(self, data, tobii_data, th_tracking = 100):
+    def filteringUnLabData(self, data, tobii_data, th_tracking=100):
         '''
         filter out unlabelled data that are not ball trajectories e.g. noise from Tobii
         :param data:
@@ -235,11 +263,11 @@ class BallFinding:
         ball_tj[only_one_cand] = has_ball[only_one_cand, np.nonzero(has_ball_bool[only_one_cand])[1]]
 
         std_ball_cand = np.average(np.nanstd(has_ball[more_one_cand], 1), 1)
-        std_ball_idx = np.nonzero(std_ball_cand < 30)[0] # ghost ball
+        std_ball_idx = np.nonzero(std_ball_cand < 30)[0]  # ghost ball
         ball_tj[more_one_cand[std_ball_idx]] = np.nanmean(has_ball[more_one_cand[std_ball_idx]], 1)
 
         # if there are more than one ball, track it
-        std_ball_multiple_idx = np.nonzero(std_ball_cand > 30)[0] # happens when there are multiple unlabel dataset
+        std_ball_multiple_idx = np.nonzero(std_ball_cand > 30)[0]  # happens when there are multiple unlabel dataset
 
         ball_tj_mask = np.nonzero(~np.isnan(np.sum(ball_tj, 1)))[0]
         for idx in more_one_cand[std_ball_multiple_idx]:
@@ -251,13 +279,9 @@ class BallFinding:
                 ball_tj[idx] = has_ball[idx][np.nanargmin(ball_cand_dist)]
                 ball_tj_mask = np.nonzero(~np.isnan(np.sum(ball_tj, 1)))[0]
 
-
-
-
-
         return ball_tj
 
-    def findEpisodesSingle(self, ball, r1, wall=None, table=None, params:EpisodesParamsSingle=None):
+    def findEpisodesSingle(self, ball, r1, wall=None, table=None, params: EpisodesParamsSingle = None):
 
         '''
         :param ball: ball trajectory
@@ -274,6 +298,7 @@ class BallFinding:
             failure_idx = []
             i = 0
             while i < (len(idx) - 1):
+                # print(idx[i])
                 check_wall_valley = (wall_vy > idx[i]) & (wall_vy < idx[i + 1])
                 if (idx[i + 1] - idx[i] < th) & np.sum(check_wall_valley) > 0:
                     curr_wall = wall_vy[((wall_vy > idx[i]) & (wall_vy < idx[i + 1]))][-1]
@@ -291,6 +316,7 @@ class BallFinding:
                             failure_idx.append(idx[i])
                     # i+=1
                 else:
+                    # print(idx[i])
                     failure_idx.append(idx[i])
                 i += 1
             success = np.vstack(sucess_idx).astype(int)
@@ -307,6 +333,7 @@ class BallFinding:
                 f_stop = failures[i + 1] if i + 1 < len(failures) else success[-1][1]
                 s_b_f = success_start[(success_start > f_start) & (success_start < f_stop)]
                 if len(s_b_f) > 0:
+
                     if (s_b_f[0] - f_start) < th_failure:
                         sbf_idx = np.nonzero((success_start > f_start) & (success_start < f_stop))[0]
                         delete_idx.append(sbf_idx)
@@ -328,34 +355,37 @@ class BallFinding:
         valleys_table = groupValleys(valleys_table, dist_table, within_th=params.TH_WITHIN, n_group=(1, 50))
         # get valleys racket 1
         valleys_rackets = findValleys(dist_rackets, th_c=params.TH_CONFIDENCE, th_d=params.TH_D_RACKET)
-        valleys_rackets = groupValleys(valleys_rackets, dist_rackets, within_th=params.TH_WITHIN_RACKET, n_group=(1, 150))
+        valleys_rackets = groupValleys(valleys_rackets, dist_rackets, within_th=params.TH_WITHIN_RACKET,
+                                       n_group=(1, 150))
 
         # check valley sanity
         valleys_rackets = checkValleysSanity(valleys_rackets, valleys_wall)
-        success_ep, failure_ep = groupEpisodes(valleys_rackets, valleys_wall, valleys_table, th=params.TH_SUCCESS_EPISODES, th_failure_sanity=params.TH_FAILURE_SANITY)
+        success_ep, failure_ep = groupEpisodes(valleys_rackets, valleys_wall, valleys_table,
+                                               th=params.TH_SUCCESS_EPISODES,
+                                               th_failure_sanity=params.TH_FAILURE_SANITY, th_failure=params.TH_FAILURE_MID_EPISODES)
         failure_ep = np.sort(failure_ep)
-        # import matplotlib.pyplot as plt
-        # plt.plot(np.arange(len(dist_rackets)), dist_rackets, label="dist", color="#66c2a5", linewidth=1)
-        # plt.plot(np.arange(len(dist_walll)), dist_walll, label="dist wall", color="#8da0cb", linewidth=1)
-        # plt.plot(np.arange(len(dist_table)), dist_table, label="dist wall", color="#e78ac3", linewidth=1)
-        #
-        # plt.plot(valleys_table, np.repeat(70, valleys_table.shape[0]), label="peaks", color="blue", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.plot(valleys_wall, np.repeat(70, valleys_wall.shape[0]), label="peaks", color="black", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.plot(success_ep[:, 0], np.repeat(70, success_ep.shape[0]), label="peaks", color="green", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.plot(success_ep[:, 1], np.repeat(70, success_ep.shape[0]), label="peaks", color="green", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.plot(failure_ep, np.repeat(70, failure_ep.shape[0]), label="peaks", color="red", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.plot(valleys_wall, np.repeat(70, valleys_wall.shape[0]), label="peaks", color="blue", marker="o",
-        #          linestyle="None", alpha=0.5)
-        # plt.show()
+        import matplotlib.pyplot as plt
+        plt.plot(np.arange(len(dist_rackets)), dist_rackets, label="dist", color="#66c2a5", linewidth=1)
+        plt.plot(np.arange(len(dist_walll)), dist_walll, label="dist wall", color="#8da0cb", linewidth=1)
+        plt.plot(np.arange(len(dist_table)), dist_table, label="dist wall", color="#e78ac3", linewidth=1)
+
+        plt.plot(valleys_table, np.repeat(70, valleys_table.shape[0]), label="peaks", color="blue", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.plot(valleys_wall, np.repeat(70, valleys_wall.shape[0]), label="peaks", color="black", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.plot(success_ep[:, 0], np.repeat(70, success_ep.shape[0]), label="peaks", color="green", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.plot(success_ep[:, 1], np.repeat(70, success_ep.shape[0]), label="peaks", color="green", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.plot(failure_ep, np.repeat(70, failure_ep.shape[0]), label="peaks", color="red", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.plot(valleys_wall, np.repeat(70, valleys_wall.shape[0]), label="peaks", color="blue", marker="o",
+                 linestyle="None", alpha=0.5)
+        plt.show()
 
         return success_ep, failure_ep, valleys_rackets, valleys_wall, valleys_table
 
-    def findEpisodesDouble(self, ball, r1, r2, wall=None, table=None, params:EpisodesParamsDouble=None):
+    def findEpisodesDouble(self, ball, r1, r2, wall=None, table=None, params: EpisodesParamsDouble = None):
 
         def groupEpisodes(idx1, idx2, wall_vy=None, table_vy=None, th=150, th_failure=400, th_failure_sanity=100):
             # check whether the ball inside the table or not
@@ -370,8 +400,8 @@ class BallFinding:
                 check_wall_valley = (wall_vy > idx[i]) & (wall_vy < idx[i + 1])
                 # check whether two valleys belong to the same person or not
                 check_diff_sub = not (np.isin(idx[i], idx1) & np.isin(idx[i + 1], idx1)) | (
-                            np.isin(idx[i], idx2) & np.isin(idx[i + 1],
-                                                            idx2))  # check whether the valley come from different subjects
+                        np.isin(idx[i], idx2) & np.isin(idx[i + 1],
+                                                        idx2))  # check whether the valley come from different subjects
                 if (idx[i + 1] - idx[i] < th) & (np.sum(check_wall_valley) > 0) & check_diff_sub:
                     curr_wall = wall_vy[((wall_vy > idx[i]) & (wall_vy < idx[i + 1]))][-1]
                     table_in_episode = (table_vy > curr_wall) & (table_vy < idx[i + 1])
@@ -424,15 +454,12 @@ class BallFinding:
 
             return success, failures
 
-
-
         dist_rackets1 = interPolateDistance(np.linalg.norm(ball - r1, axis=-1))
         dist_rackets1[np.isnan(np.sum(r1, 1))] = 10000
         dist_rackets2 = interPolateDistance(np.linalg.norm(ball - r2, axis=-1))
         dist_rackets2[np.isnan(np.sum(r2, 1))] = 10000
         dist_walll = interPolateDistance(np.abs(ball[:, 1] - wall[1]))
         dist_table = interPolateDistance(np.abs(ball[:, 2] - table[2]))
-
 
         # save all distances
         # add_text = ""
@@ -459,13 +486,14 @@ class BallFinding:
         valleys_table = findValleys(dist_table, th_c=params.TH_CONFIDENCE, th_d=params.TH_D_TABLE)
         valleys_table = groupValleys(valleys_table, dist_table, within_th=params.TH_WITHIN)
 
-
         # check valley sanity
         valleys_rackets1 = checkValleysSanity(valleys_rackets1, valleys_wall, dis_th=params.TH_RACKET_SANITY)
         valleys_rackets2 = checkValleysSanity(valleys_rackets2, valleys_wall, dis_th=params.TH_RACKET_SANITY)
 
-        success_ep, failure_ep = groupEpisodes(valleys_rackets1, valleys_rackets2, valleys_wall, valleys_table, th=params.TH_SUCCESS_EPISODES,
-                                               th_failure=params.TH_FAILURE_MID_EPISODES, th_failure_sanity=params.TH_FAILURE_SANITY)
+        success_ep, failure_ep = groupEpisodes(valleys_rackets1, valleys_rackets2, valleys_wall, valleys_table,
+                                               th=params.TH_SUCCESS_EPISODES,
+                                               th_failure=params.TH_FAILURE_MID_EPISODES,
+                                               th_failure_sanity=params.TH_FAILURE_SANITY)
 
         failure_ep = np.sort(failure_ep)
         plt.plot(np.arange(len(dist_rackets1)), dist_rackets1, label="dist", color="#238b45", linewidth=1)
@@ -478,7 +506,6 @@ class BallFinding:
         plt.plot(valleys_table, np.repeat(20, valleys_table.shape[0]), label="peaks", color="orange", marker="o",
                  linestyle="None", alpha=0.5)
 
-
         plt.plot(valleys_rackets1, np.repeat(20, valleys_rackets1.shape[0]), label="peaks", color="black", marker="o",
                  linestyle="None", alpha=0.5)
         plt.plot(valleys_rackets2, np.repeat(20, valleys_rackets2.shape[0]), label="peaks", color="black", marker="o",
@@ -488,8 +515,8 @@ class BallFinding:
                  linestyle="None", alpha=0.5)
         plt.plot(success_ep[:, 1], np.repeat(20, success_ep.shape[0]), label="peaks", color="green", marker="o",
                  linestyle="None", alpha=0.5)
-        plt.plot(failure_ep, np.repeat(70, failure_ep.shape[0]), label="peaks", color="red", marker="o",
-                 linestyle="None", alpha=0.5)
+        # plt.plot(failure_ep, np.repeat(70, failure_ep.shape[0]), label="peaks", color="red", marker="o",
+        #          linestyle="None", alpha=0.5)
 
         plt.show()
 
@@ -518,29 +545,33 @@ class BallFinding:
         unlabelled_data = data_points[0:3, unlabeled_idx, :]
         tobii_data = []
         for s in self.subjects:
-            tobii_data.append(s["segments"][:, -3:])  # tobii data are the 3 last columns
+            tobii_data.append(s["segments"].filter(regex='TobiiGlass_T').values)  # tobii data are the 3 last columns
         tobii_data = np.array(tobii_data)
         normalized_data = self.filteringUnLabData(unlabelled_data, tobii_data)
         smooth_ball_data = np.array([movingAverage(normalized_data[:, i], n=1) for i in range(3)]).transpose()
         smooth_r1_data = np.array(
-            [movingAverage(self.racket_1["segments"][:, 3 + i], n=1) for i in range(3)]).transpose()
+            [movingAverage(self.racket_1["segments"].filter(regex='pt_T').values[:, i], n=1) for i in
+             range(3)]).transpose()
 
         success_ep, failure_ep, valleys_rackets, valleys_wall, valleys_table = self.findEpisodesSingle(smooth_ball_data,
                                                                                                        smooth_r1_data,
                                                                                                        wall=self.wall_centro,
                                                                                                        table=self.table_mean
-                                                                                                       ,params=EpisodesParamsSingle("not_clean"))
-        clean_ball = self.extrapolateInterpolateBall(smooth_ball_data, success_ep, failure_ep, valleys_wall, valleys_table,
+                                                                                                       ,
+                                                                                                       params=EpisodesParamsSingle(
+                                                                                                           "not_clean"))
+        clean_ball = self.extrapolateInterpolateBall(smooth_ball_data, success_ep, failure_ep, valleys_wall,
+                                                     valleys_table,
                                                      wall=self.wall_centro,
-                                                     table=self.table_mean, th_failure_extrapolate=EpisodesParamsSingle.TH_FAILURE_EXTRAPOLATE)
-
-
+                                                     table=self.table_mean,
+                                                     th_failure_extrapolate=EpisodesParamsSingle.TH_FAILURE_EXTRAPOLATE)
 
         success_ep2, failure_ep2, valleys_rackets2, valleys_wall2, valleys_table2 = self.findEpisodesSingle(clean_ball,
                                                                                                             smooth_r1_data,
                                                                                                             wall=self.wall_centro,
                                                                                                             table=self.table_mean,
-                                                                                                            params=EpisodesParamsSingle("clean_ball"))
+                                                                                                            params=EpisodesParamsSingle(
+                                                                                                                "clean_ball"))
         print("Before cleaning")
         print("Success: " + str(len(success_ep)))
         print("Failure: " + str(len(failure_ep)))
@@ -549,10 +580,11 @@ class BallFinding:
         print("Success: " + str(len(success_ep2)))
         print("Failure: " + str(len(failure_ep2)))
 
-
-
-
-        return clean_ball
+        return clean_ball, self.contructValleyWallTable(success_ep2, valleys_wall2,
+                                                        valleys_table2), self.constructFailureEpisodes(success_ep2,
+                                                                                                       failure_ep2,
+                                                                                                       valleys_wall2,
+                                                                                                       valleys_table2)
 
     def cleanDoubleData(self, file_path: str = None):
         data = ezc3d.c3d(file_path)
@@ -564,30 +596,33 @@ class BallFinding:
         unlabelled_data = data_points[0:3, unlabeled_idx, :]
         tobii_data = []
         for s in self.subjects:
-            tobii_data.append(s["segments"][:, -3:])  # tobii data are the 3 last columns
+            tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
+            tobii_data.append(tobii_segment)  # tobii data are the 3 last columns
 
         tobii_data = np.array(tobii_data)
         normalized_data = self.filteringUnLabData(unlabelled_data, tobii_data)
 
         smooth_ball_data = np.array([movingAverage(normalized_data[:, i], n=1) for i in range(3)]).transpose()
         smooth_r1_data = np.array(
-            [movingAverage(self.racket_1["segments"][:, 3 + i], n=1) for i in range(3)]).transpose()
+            [movingAverage(self.racket_1["segments"].filter(regex='pt_T').values[:, i], n=1) for i in
+             range(3)]).transpose()
         smooth_r2_data = np.array(
-            [movingAverage(self.racket_2["segments"][:, 3 + i], n=1) for i in range(3)]).transpose()
+            [movingAverage(self.racket_2["segments"].filter(regex='pt_T').values[:, i], n=1) for i in
+             range(3)]).transpose()
 
-        success_ep, failure_ep, valleys_rackets1, valleys_rackets2, valleys_wall, valleys_table = self.findEpisodesDouble(smooth_ball_data,
-                                                                                                       smooth_r1_data,
-                                                                                                       smooth_r2_data,
-                                                                                                       wall=self.wall_centro,
-                                                                                                       table=self.table_mean
-                                                                                                       ,params=EpisodesParamsDouble("not_clean"))
+        success_ep, failure_ep, valleys_rackets1, valleys_rackets2, valleys_wall, valleys_table = self.findEpisodesDouble(
+            smooth_ball_data,
+            smooth_r1_data,
+            smooth_r2_data,
+            wall=self.wall_centro,
+            table=self.table_mean
+            , params=EpisodesParamsDouble("not_clean"))
 
-        clean_ball = self.extrapolateInterpolateBall(smooth_ball_data, success_ep, failure_ep, valleys_wall, valleys_table,
+        clean_ball = self.extrapolateInterpolateBall(smooth_ball_data, success_ep, failure_ep, valleys_wall,
+                                                     valleys_table,
                                                      wall=self.wall_centro,
-                                                     table=self.table_mean, th_failure_extrapolate=EpisodesParamsDouble.TH_FAILURE_EXTRAPOLATE)
-
-
-
+                                                     table=self.table_mean,
+                                                     th_failure_extrapolate=EpisodesParamsDouble.TH_FAILURE_EXTRAPOLATE)
 
         success_ep2, failure_ep2, valleys_rackets1, valleys_rackets2, valleys_wall, valleys_table = self.findEpisodesDouble(
             clean_ball,
@@ -595,7 +630,7 @@ class BallFinding:
             smooth_r2_data,
             wall=self.wall_centro,
             table=self.table_mean
-            ,params=EpisodesParamsDouble("clean_ball"))
+            , params=EpisodesParamsDouble("clean_ball"))
 
         print("Before cleaning")
         print("Success: " + str(len(success_ep)))
@@ -618,19 +653,22 @@ class BallFinding:
 
         return clean_ball
 
+
 if __name__ == '__main__':
-    reader = ViconReader()
-    # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.30\\T02.csv")
-    # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.12.01\\T02.csv")
-    obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02.csv", cleaning=True)
-    # obj, sub = reader.extractData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2023.02.15\\T03.csv")
+    folder_name = "2022-11-08_A"
+    file_name = "2022-11-08_A_T03"
+    reader = SubjectObjectReader()
+    obj, sub = reader.extractData(
+        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"+folder_name+"\\"+file_name+".pkl")
 
     reader = BallFinding(obj, sub)
-    # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.30\\T02.c3d")
-    # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.12.01\\T02.c3d")
-    data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02.c3d")
-    # data = reader.cleanDoubleData("F:\\users\\prasetia\\data\\TableTennis\\Test\\2023.02.15\\T03.c3d")
+    data, success, failures = reader.cleanSingleData(
+        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\"+folder_name+"\\"+file_name+".c3d")
+
 
     df = pd.DataFrame(data, columns=["ball_x", "ball_y", "ball_z"])
-    df.to_csv("F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\T02_ball.csv")
-    print(len(data))
+    data = [obj, sub, [{"name": "ball", "trajectories": df, "success_idx": success, "failures_idx": failures}]]
+    with open(
+            "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"+folder_name+"\\"+file_name+"_wb.pkl",
+            'wb') as f:
+        pickle.dump(data, f)

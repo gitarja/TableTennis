@@ -3,7 +3,7 @@ from scipy.interpolate import interp1d
 from numpy import array
 from statsmodels.tsa.ar_model import AutoReg
 import matplotlib.pyplot as plt
-from Utils.Lib import movingAverage, savgolFilter
+from Utils.Lib import movingAverage, savgolFilter, interExtrapolate2
 from scipy.optimize import curve_fit
 
 def interpolate(x: np.array, final: bool =False) -> np.array:
@@ -250,7 +250,10 @@ def cleanEpisodes(episode, ep1, ep2, ep3, end_ep2_idx, idx_first_table, wall_y, 
     x_inter_e2 = ep2
     if np.sum(~np.isnan(ep2[:, 0])) > 3:
         x_inter_e2 = np.array([extrapolateAutoReg(x_inter_e2[:, i], idx_ep=2) for i in range(3)]).transpose()
-    x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=3) for i in range(3)]).transpose()
+    if np.sum(~np.isnan(x_inter_e3[:, 0])) >= 4:
+        x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=3) for i in range(3)]).transpose()
+    else:
+        x_inter_e3 = np.array([interExtrapolate2(x_inter_e3[:, i]) for i in range(3)]).transpose()
 
 
     ep12 = combineEpisode(ori=episode[:end_ep2_idx], ep1=x_inter_e1, ep2=x_inter_e2, base=wall_y)

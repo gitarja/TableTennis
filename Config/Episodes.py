@@ -22,7 +22,7 @@ class EpisodesParamsDouble:
             self.TH_D_TABLE = 80  # threshold for table
             self.TH_RACKET_SANITY = 230  # threshold for episode sanity
             self.TH_SUCCESS_EPISODES = 250  # threshold for success episode
-            self.TH_FAILURE_MID_EPISODES = 300  # threshold for the duration between success and failure episode
+            self.TH_FAILURE_MID_EPISODES = 250  # threshold for the duration between success and failure episode
             self.TH_FAILURE_SANITY = 100 # threshold for two consecutive failure
 
 
@@ -50,5 +50,5 @@ class EpisodesParamsSingle:
             self.TH_D_TABLE = 100  # threshold for table
             self.TH_RACKET_SANITY = 230  # threshold for episode sanity
             self.TH_SUCCESS_EPISODES = 250  # threshold for success episode
-            self.TH_FAILURE_MID_EPISODES = 400  # threshold for the duration between success and failure episode
+            self.TH_FAILURE_MID_EPISODES = 250  # threshold for the duration between success and failure episode
             self.TH_FAILURE_SANITY = 100 # threshold for two consecutive failure

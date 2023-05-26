@@ -3,6 +3,10 @@ from Utils.DataReader import ViconReader
 from Utils.Lib import interExtrapolate
 import matplotlib.pyplot as plt
 from scipy.ndimage import label
+import pandas as pd
+from Utils.Lib import checkMakeDir
+pd.options.mode.chained_assignment = None  # default='warn'
+
 class SegmentsCleaner:
 
     def cleanData(self, segment:np.array, condition:np.array, th:float=2):
@@ -16,22 +20,29 @@ class SegmentsCleaner:
                 index.append(np.arange(start, stop+1))
 
             conditions_def = np.zeros((len_condition)).astype(bool)
-            conditions_def[np.concatenate(index)] = True
-            return conditions_def
+            if len(index)!=0:
+                conditions_def[np.concatenate(index)] = True
+                return conditions_def
+            return np.array([])
         # segment condition
         d2_segment = np.abs(np.diff(segment, 2, axis=0))  # compute acceleration
         d2_segment = np.concatenate([np.zeros((2, 3)), d2_segment])
 
 
         segment_condition = np.sum(d2_segment > th, axis=-1) >= 1
-        segment_condition = groupNoisySegment(np.nonzero(segment_condition)[0], within_th=25, len_condition=len(d2_segment))
-        nan_mask = ~np.isnan(np.sum(segment, -1))
-        mask = np.nonzero(nan_mask & (condition | segment_condition))[0]
-        segment[mask, :] = np.nan
-        print(len(mask) / len(segment))
+        cleaned_percentage = 0
+        if np.sum(segment_condition) != 0:
+            segment_condition = groupNoisySegment(np.nonzero(segment_condition)[0], within_th=25, len_condition=len(d2_segment))
+            nan_mask = ~np.isnan(np.sum(segment, -1))
+            mask = np.nonzero(nan_mask & (condition))[0]
+            if len(segment_condition) != 0:
+                mask = np.nonzero(nan_mask & (condition | segment_condition))[0]
+            segment[mask, :] = np.nan
+            cleaned_percentage = 100 * (len(mask) / len(segment))
+
         new_segment =  np.array([interExtrapolate(segment[:, i]) for i in range(3)]).transpose()
 
-        return new_segment
+        return new_segment, cleaned_percentage
 
 
     def tobiiCleanData(self, segment:np.array, trajectories: np.array, th:float=2):
@@ -85,36 +96,63 @@ class SegmentsCleaner:
 
 
 
-result_path = "F:\\users\\prasetia\\data\\TableTennis\\Test\\2022.11.08\\Compiled\\"
-reader = ViconReader()
-obj, sub = reader.extractData(result_path + "T02_Nexus.csv", cleaning=True)
-cleaner = SegmentsCleaner()
-for s in sub:
 
-    print(s["name"])
+ref_file = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\Tobii_ref.csv"
+file_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\"
+result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
+ref_df = pd.read_csv(ref_file)
+single_df = ref_df.loc[ref_df.Trial_Type=="S"]
 
-    # tobii cleaning
-    start_idx = (18 * 6) + 3
-    tobii_segment = s["segments"][:, start_idx:start_idx + 3]
-    tobii_trajectories = s["trajectories"][:, -18:]
-    tobii_cs = np.copy(tobii_segment)
-    tobii_ct = np.copy(tobii_trajectories)
-    new_tobii_segment = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
-    s["segments"][:, start_idx:start_idx + 3] = new_tobii_segment
-    # right wirst cleaning
-    start_idx = (15 * 6) + 3
-    rwrist_segment = s["segments"][:, start_idx:start_idx + 3]
-    rwrist_trajectories = s["trajectories"][:, (16 * 3): (18 * 3)]
-    rwrist_cs = np.copy(rwrist_segment)
-    rwrist_ct = np.copy(rwrist_trajectories)
-    new_rwrist_segment = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
-    s["segments"][:, start_idx:start_idx + 3] = new_rwrist_segment
+for i, d in single_df.iterrows():
+    dates = d["Date"].replace(".", "-")
+    session = d["Session"]
+    trial = d["Trial"]
 
+    folder_name = dates + "_" + session
+    file_name = folder_name + "_" + trial
+
+    file_session_path = file_path+folder_name+"\\"
+    result_session_path = result_path+folder_name+"\\"
+
+    checkMakeDir(result_session_path)
+    reader = ViconReader()
+    obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
+    cleaner = SegmentsCleaner()
+    for s in sub:
 
 
-#
-# import pickle
-# data = [obj, sub]
-#
-# with open(result_path + 'T02_Nexus.pkl', 'wb') as f:
-#     pickle.dump(data, f)
+
+        # tobii cleaning
+        start_idx = (18 * 6) + 3
+        tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
+        tobii_trajectories = s["trajectories"].filter(regex='Tobii').values
+        tobii_cs = np.copy(tobii_segment)
+        tobii_ct = np.copy(tobii_trajectories)
+        new_tobii_segment, tobii_cleaned_p = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
+        s["segments"].filter(regex='TobiiGlass_T').loc[:] = new_tobii_segment
+        # right wirst cleaning
+        start_idx = (15 * 6) + 3
+        rwrist_segment = s["segments"].filter(regex='R_Wrist_T').values
+        rwrist_trajectories = s["trajectories"].filter(regex='(RWRA|RWRB)').values
+        rwrist_cs = np.copy(rwrist_segment)
+        rwrist_ct = np.copy(rwrist_trajectories)
+        new_rwrist_segment, rwirst_cleaned_p = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
+        s["segments"].filter(regex='R_Wrist_T').loc[:] = new_rwrist_segment
+        # left wirst cleaning
+        start_idx = (6 * 6) + 3
+        lwrist_segment = s["segments"].filter(regex='L_Wrist_T').values
+        lwrist_trajectories = s["trajectories"].filter(regex='(LWRA|LWRB)').values
+        lwrist_cs = np.copy(lwrist_segment)
+        lwrist_ct = np.copy(lwrist_trajectories)
+        new_lwrist_segment, lwirst_cleaned_p = cleaner.wristCleaning(lwrist_cs, lwrist_ct)
+        s["segments"].filter(regex='L_Wrist_T').loc[:] = new_lwrist_segment
+
+        print("%s, %s, %f, %f, %f" % (file_name, s["name"], tobii_cleaned_p, rwirst_cleaned_p, lwirst_cleaned_p))
+
+
+
+    import pickle
+    data = [obj, sub]
+
+    with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
+        pickle.dump(data, f)

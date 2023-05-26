@@ -143,7 +143,7 @@ class Ui_MainWindow(QMainWindow):
             self.graph.addItem(self.wall_line)
 
             # Add table
-            self.table_line = gl.GLLinePlotItem(pos=np.zeros((2, 3)), color=(0.0, 0.0, 1.0, 1.0), width=0.5,
+            self.table_line = gl.GLLinePlotItem(pos=np.zeros((2, 3)), color=(1.0, 0., .0, 1.0), width=0.5,
                                                antialias=True,
                                                mode="lines")
             self.graph.addItem(self.table_line)
@@ -174,14 +174,14 @@ class Ui_MainWindow(QMainWindow):
             pass
 
         # Add floor
-        gz = gl.GLGridItem(size=QtGui.QVector3D(100, 100, 1))
-        gz.translate(0, 0, 0)
-        self.graph.addItem(gz)
+        # gz = gl.GLGridItem(size=QtGui.QVector3D(100, 100, 1))
+        # gz.translate(0, 0, 0)
+        # self.graph.addItem(gz)
 
         # add ECG plotting
 
         self.ecg_graph = pg.PlotWidget(enableMouse=False)
-        self.ecg_graph.setYRange(500, 1100)
+        self.ecg_graph.setYRange(400, 900)
         self.ecg_graph.enableMouse(False)
         self.ecg_graph.getPlotItem().hideAxis('bottom')
         self.ecg_graph.getPlotItem().setMouseEnabled(x=False, y=False)

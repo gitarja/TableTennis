@@ -13,6 +13,7 @@ import pickle
 
 from numpy.lib import stride_tricks
 
+
 import ezc3d
 
 
@@ -39,24 +40,60 @@ class SubjectObjectReader:
         with open(path, 'rb') as f:
             list = pickle.load(f)
 
+            if len(list) == 3:
+                return list[0], list[1], list[2]
+
+            if len(list) == 4:
+                return list[0], list[1], list[2], list[3]
+
             return list[0], list[1]
 
 
 class TobiiReader:
 
-    def local2GlobalGaze(self, gaze, tobii_seg, tobii_rot):
+    def gapFill(self, x):
+        try:
+            x = np.asarray([self.interPolate(x[:, i]) for i in range(x.shape[1])]).transpose()
+        except:
+            print("error")
 
-        rads = np.deg2rad(tobii_rot)
-        R_m = np.array([transforms3d.axangles.axangle2mat(r, np.sqrt(np.sum(r ** 2))) for r in rads])
+        return x
+
+    def interPolateTransform(self, gaze, tobii_seg, tobii_rot, translation=True):
+        try:
+            gaze = np.asarray([self.interPolate(gaze[:, i]) for i in range(gaze.shape[1])]).transpose()
+        except:
+            print("error")
+
+        return self.local2GlobalGaze(gaze, tobii_seg, tobii_rot, translation=translation)
+
+    def local2GlobalGaze(self, gaze, tobii_seg, tobii_rot, translation=True):
+
+
+        R_m = np.array([R.from_rotvec(r, degrees=True).as_matrix() for r in tobii_rot])
+        # R_m = np.array([transforms3d.axangles.axangle2mat(r, np.sqrt(np.sum(r ** 2))) for r in rads])
 
         gaze_global = np.squeeze(np.matmul(R_m, np.expand_dims(gaze, 2)))
 
-        return gaze_global + tobii_seg
+        if translation:
+            return gaze_global + tobii_seg
+        else:
+            return gaze_global
+
+    def local2GlobalRot(self, seg, tobii_rot):
+
+
+        R_m = np.array([R.from_rotvec(r, degrees=True).as_matrix() for r in tobii_rot])
+
+        seg_global = np.squeeze(np.matmul(R_m, np.expand_dims(seg, 2)))
+
+        return seg_global
 
     def interPolate(self, g):
         mask = np.isnan(g)
         if np.sum(mask) > 0:
             g[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), g[~mask])
+
         return g
 
     def cutData(self, data: pd.DataFrame = None):

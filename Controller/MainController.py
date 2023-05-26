@@ -1,6 +1,9 @@
 import subprocess
 import os
 import sys
+
+import pandas as pd
+
 from Views.MainViewer import Ui_MainWindow
 from PyQt5.QtWidgets import QApplication
 from PyQt5 import QtWidgets
@@ -89,8 +92,12 @@ class Feeder(QtCore.QThread):
         vicon_reader = ViconReader()
         self.tobii_reader = TobiiReader()
 
+        # self.human_segments = [vicon_reader.constructSegments(d["segments"], vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
+        # self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"]) for d in self.sub_data]
+
         self.human_segments = [vicon_reader.constructSegments(d["segments"], vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
         self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"]) for d in self.sub_data]
+
 
     def run(self):
         """Long-running task."""
@@ -100,11 +107,11 @@ class Feeder(QtCore.QThread):
                     self.sendData()
                     self.idx_nexus +=1
                     # ---------------sleep--------#
-                    time.sleep(1. / 50.)
+                    time.sleep(1. / 100.)
                 else:
                     break
             else:
-                time.sleep(1. / 50.)
+                time.sleep(1. / 100.)
 
 
     def sendData(self):
@@ -122,7 +129,7 @@ class Feeder(QtCore.QThread):
         print(self.idx_nexus)
 
         self.ball_trajectories_points.emit(ball_trajectories[1:].tolist())
-        self.ballarea_trajectories_points.emit(ball_area_trajectories.tolist())
+        # self.ballarea_trajectories_points.emit(ball_area_trajectories.tolist())
 
         if self.idx_nexus % 100 == 0:
             if self.idx_ecg < len(self.ecg_data):
@@ -142,8 +149,9 @@ class Feeder(QtCore.QThread):
                 gaze_inf = np.array([np.array(g)[2:11] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
                 # tobii_rot = np.array([np.array(h) for h in self.tobii_data.iloc[self.idx_tobii]["Head"]])
                 tobii_rot = np.array([r[self.idx_nexus][-1] for r in self.segments_rot])
-                # tobii_rot = gaze_inf[:, [9, 10, 11]]
+
                 gaze = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 0:3], tobii_segments, tobii_rot)
+                print(gaze)
                 eye_left = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 3:6], tobii_segments, tobii_rot)
                 eye_right = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 6:9], tobii_segments, tobii_rot)
 
