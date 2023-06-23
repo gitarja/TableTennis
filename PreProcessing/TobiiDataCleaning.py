@@ -4,7 +4,20 @@ import numpy as np
 from Utils.DataReader import SubjectObjectReader
 
 
+def eventToNumeric(x_0, x):
+    if x == 'Fixation':
+        return 2
+    elif x == 'Saccade':
+        return 1
+    elif x == 0:
+        return x_0
+    else:
+        return 3
+
+
 class TobiiCleaner:
+    # eye event labels
+    eye_labels = {"Fixation": 1, "Saccade": 2}
 
     def __init__(self, ref_path):
         self.ref_file = pd.read_csv(ref_path)
@@ -24,6 +37,9 @@ class TobiiCleaner:
         stop = ref.Stop_TTL.values[0] * 1000
         vicon_frame = ref.Vicon_Frame.values[0]
 
+        print(start)
+        # start = start - (int(ref.Offset.values[0]) * 10)
+        # stop  = stop + (int(ref.Offset.values[0]) * 10)
         cut_data = data[
             (data["Recording timestamp"] >= start) & (data["Recording timestamp"] <= stop) & (
                     data["Sensor"] == "Eye Tracker")]
@@ -37,7 +53,8 @@ class TobiiCleaner:
                             "Gaze direction left X", "Gaze direction left Y", "Gaze direction left Z",
                             "Gaze direction right X", "Gaze direction right Y", "Gaze direction right Z",
                             "Pupil position left X", "Pupil position left Y", "Pupil position left Z",
-                            "Pupil position right X", "Pupil position right Y", "Pupil position right Z"]
+                            "Pupil position right X", "Pupil position right Y", "Pupil position right Z",
+                            "Eye movement type"]
 
         # cut_data = cut_data.dropna(subset=["Gaze direction left X"])
         # print( 100 * np.average(np.isnan(cut_data["Gaze direction left X"].values)))
@@ -48,9 +65,7 @@ class TobiiCleaner:
                    "Gaze_direction_left_X", "Gaze_direction_left_Y", "Gaze_direction_left_Z",
                    "Gaze_direction_right X", "Gaze_direction_right_Y", "Gaze_direction_right_Z",
                    "Pupil_position_left_X", "Pupil_position_left_Y", "Pupil_position_left_Z",
-                   "Pupil_position_right_X", "Pupil_position_right_Y", "Pupil_position_right_Z"]
-
-
+                   "Pupil_position_right_X", "Pupil_position_right_Y", "Pupil_position_right_Z", "Eye_movement_type"]
 
         temp_data = np.empty((vicon_frame, len(columns)))
         tobii_df = pd.DataFrame(data=temp_data, columns=columns)
@@ -60,13 +75,17 @@ class TobiiCleaner:
             cut_data = cut_data.iloc[::2]
         start = start + np.arange(vicon_frame) * 10
         valid = (cut_data["Validity left"].values == "Valid") | (cut_data["Validity right"].values == "Valid")
-        dist_mat = np.abs(np.expand_dims(cut_data["Recording timestamp"], 1) - np.expand_dims(start, axis=0))
+        tobii_time = cut_data["Recording timestamp"].values
+        dist_mat = np.abs(np.expand_dims(start, axis=0) - np.expand_dims(tobii_time, 1))
         closest_points = np.nanmin(dist_mat, axis=-1)
         closest_idx = np.nanargmin(dist_mat, axis=-1)
-        closest_idx = closest_idx - np.min(closest_idx)
         selected_idx = np.argwhere((closest_points <= 15) & (valid))[:, 0]
-
-        tobii_df.iloc[int(ref.Offset.values) + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][selected_columns]
+        tobii_df.iloc[8 + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][
+            selected_columns]
+        for i in range(1, len(tobii_df)):
+            tobii_df.loc[i, 'Eye_movement_type'] = eventToNumeric(tobii_df.loc[i-1, 'Eye_movement_type'], tobii_df.loc[i, 'Eye_movement_type'])
+        print(int(ref.Offset.values[0]))
+        # tobii_df.iloc[ int(ref.Offset.values[0]) + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][selected_columns]
 
         print(100 * (np.sum(tobii_df.Timestamp.values != 0) / vicon_frame))
         return participant, tobii_df
@@ -76,28 +95,34 @@ if __name__ == '__main__':
     import glob
     import pickle
 
-    folder_name = "2022-11-08_A"
-    file_name = "2022-11-08_A_T03"
-
-    # folder_name = "2023-02-08_A"
-    # file_name = "2023-02-08_A_T04"
-    path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
-    reader = SubjectObjectReader()
-    obj, sub, ball = reader.extractData(
-        path + folder_name + "\\" + file_name + "_wb.pkl")
-
     ref_file = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\Tobii_ref.csv"
+    result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
+    ref_df = pd.read_csv(ref_file)
+    single_df = ref_df.loc[ref_df.Trial_Type == "S"]
+    for i, d in single_df.iterrows():
+        dates = d["Date"].replace(".", "-")
+        session = d["Session"]
+        trial = d["Trial"]
 
-    reader = TobiiCleaner(ref_file)
-    tobii_filename = file_name.split("_")[-1] + "_" + sub[0]["name"] + ".tsv"
-    tobii_files = glob.glob(path + folder_name + "\\Tobii\\*" + tobii_filename + "")
+        folder_name = dates + "_" + session
+        file_name = folder_name + "_" + trial
 
-    if len(tobii_files) == 1:
-        participant, tobii_df = reader.matchData(tobii_files[0])
+        if file_name == "2022-11-08_A_T03":
+            reader = SubjectObjectReader()
+            obj, sub, ball = reader.extractData(
+                result_path + folder_name + "\\" + file_name + "_wb.pkl")
 
-        data = [obj, sub, ball, [{"name": participant, "trajectories": tobii_df}]]
+            tobii_results = []
+            for s in sub:
+                reader = TobiiCleaner(ref_file)
+                tobii_filename = file_name.split("_")[-1] + "_" + s["name"] + ".tsv"
+                tobii_files = glob.glob(result_path + folder_name + "\\Tobii\\*" + tobii_filename + "")
+                participant, tobii_df = reader.matchData(tobii_files[0])
+                tobii_results.append({"name": participant, "trajectories": tobii_df})
 
-        with open(
-                path + folder_name + "\\" + file_name + "_complete.pkl",
-                'wb') as f:
-            pickle.dump(data, f)
+            data = [obj, sub, ball, tobii_results]
+
+            with open(
+                    result_path + folder_name + "\\" + file_name + "_complete.pkl",
+                    'wb') as f:
+                pickle.dump(data, f)

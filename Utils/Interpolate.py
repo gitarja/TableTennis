@@ -3,7 +3,7 @@ from scipy.interpolate import interp1d
 from numpy import array
 from statsmodels.tsa.ar_model import AutoReg
 import matplotlib.pyplot as plt
-from Utils.Lib import movingAverage, savgolFilter, interExtrapolate2
+from Utils.Lib import movingAverage, savgolFilter, interExtrapolate2, butterLowPassFilter
 from scipy.optimize import curve_fit
 
 def interpolate(x: np.array, final: bool =False) -> np.array:
@@ -173,7 +173,7 @@ def extrapolateAutoReg(data, idx_first_table=0, idx_ep=1):
                 x[idx] = model_f_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
             #backward extrapolation
             else:
-                if idx_ep == 1:
+                if (idx_ep == 1)|(idx_ep == 4) :
                     end_idx = idx_inv[idx]
                     x[idx] = model_b_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
 
@@ -238,22 +238,36 @@ def cleanEpisodes(episode, ep1, ep2, ep3, end_ep2_idx, idx_first_table, wall_y, 
 
     ori_episode = np.copy(episode)
 
+
     x_inter_e1 = np.array([interpolate(ep1[:, i]) for i in range(3)]).transpose()
+    x_inter_e1 = np.array(
+        [extrapolateAutoReg(x_inter_e1[:, i], idx_first_table, idx_ep=1) for i in range(3)]).transpose()
+
+
     x_inter_e2 = ep2
-    if np.sum(~np.isnan(ep2[:, 0])) > 3:
+    if np.sum(~np.isnan(ep2[:, 0])) > 2:
         x_inter_e2 = np.array([interpolate(ep2[:, i]) for i in range(3)]).transpose()
     x_inter_e3 = np.array([interpolate(ep3[:, i]) for i in range(3)]).transpose()
 
 
 
-    x_inter_e1 = np.array([extrapolateAutoReg(x_inter_e1[:, i], idx_first_table, idx_ep=1) for i in range(3)]).transpose()
-    x_inter_e2 = ep2
-    if np.sum(~np.isnan(ep2[:, 0])) > 3:
-        x_inter_e2 = np.array([extrapolateAutoReg(x_inter_e2[:, i], idx_ep=2) for i in range(3)]).transpose()
-    if np.sum(~np.isnan(x_inter_e3[:, 0])) >= 4:
-        x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=3) for i in range(3)]).transpose()
+    if np.sum(~np.isnan(x_inter_e3[:, 0])) >= 5:
+        try:
+            x_inter_e3 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=3) for i in range(3)]).transpose()
+            x_inter_e4 = np.array([extrapolateAutoReg(x_inter_e3[:, i], idx_ep=4) for i in range(3)]).transpose()
+        except:
+            print("Error")
+
     else:
         x_inter_e3 = np.array([interExtrapolate2(x_inter_e3[:, i]) for i in range(3)]).transpose()
+        x_inter_e4 = x_inter_e3
+
+    if np.sum(~np.isnan(x_inter_e2[:, 0])) >= 5:
+        x_inter_e2 = np.array([extrapolateAutoReg(x_inter_e2[:, i], idx_ep=2) for i in range(3)]).transpose()
+    else:
+        x_inter_e2[-1, :] = x_inter_e4[np.argwhere(~np.isnan(x_inter_e4[:, 0]))][0]
+        x_inter_e2[-1, 2] = table_z
+
 
 
     ep12 = combineEpisode(ori=episode[:end_ep2_idx], ep1=x_inter_e1, ep2=x_inter_e2, base=wall_y)
@@ -272,20 +286,26 @@ def cleanEpisodes(episode, ep1, ep2, ep3, end_ep2_idx, idx_first_table, wall_y, 
 
         ep23[:, 0] = savgolFilter(ep23[:, 0], n=5)
 
+    nan_mask = np.isnan(ori_episode[:, 0])
+    final_episode = np.copy(ori_episode)
+    final_episode[nan_mask, :] = ep23[nan_mask, :]
+    final_episode = np.array(
+        [movingAverage(final_episode[:, i], n=3) for i in range(3)]).transpose()
     # fig = plt.figure()
     # ax = fig.add_subplot(projection='3d')
     #
-    # ax.scatter(ori_episode[:, 0], ori_episode[:, 1], ori_episode[:, 2], c="black")
-    # #
-    # ax.scatter(x_inter_e1[:, 0], x_inter_e1[:, 1], x_inter_e1[:, 2], c="blue")
-    # ax.scatter(x_inter_e2[:, 0], x_inter_e2[:, 1], x_inter_e2[:, 2], c="orange")
-    # ax.scatter(x_inter_e3[:, 0], x_inter_e3[:, 1], x_inter_e3[:, 2], c="red")
     #
-    # ax.scatter(ep23[:, 0], ep23[:, 1], ep23[:, 2], c="green")
+    # ax.scatter(ori_episode[:, 0], ori_episode[:, 1], ori_episode[:, 2], c="black")
+    #
+    # # ax.scatter(x_inter_e1[:, 0], x_inter_e1[:, 1], x_inter_e1[:, 2], c="blue")
+    # # ax.scatter(x_inter_e2[:, 0], x_inter_e2[:, 1], x_inter_e2[:, 2], c="orange")
+    # # ax.scatter(x_inter_e3[:, 0], x_inter_e3[:, 1], x_inter_e3[:, 2], c="red")
+    #
+    # ax.scatter(final_episode[:, 0], final_episode[:, 1], final_episode[:, 2], c="green")
     # plt.show()
 
 
-    return ep23
+    return final_episode
 
 
 if __name__ == '__main__':

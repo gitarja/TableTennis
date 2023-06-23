@@ -1,36 +1,44 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import seaborn as sns
-from Utils.Lib import wienerFilter, movingAverage, savgolFilter
+from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToPolar
+from Utils.GazeEvent import detectALPhase1, detectALPhase2
 import pandas as pd
+
 sns.despine(offset=10, trim=True, left=True)
 sns.set_palette(sns.color_palette("Set2"))
 from Utils.DataReader import TobiiReader
 import matplotlib.patches as mpatches
 from scipy.signal import find_peaks
+from scipy.signal import savgol_filter
+
 
 class Classic:
 
-    def __init__(self, sub, racket, ball, tobii, table):
-        #tobii reader
+    def __init__(self, sub, racket, ball, tobii, table, wall):
+        # tobii reader
         self.tobii_reader = TobiiReader()
-
-
 
         s = sub["segments"]
         r = racket["segments"]
         tobii = tobii["trajectories"]
-        table = table["trajectories"].values.reshape((-1, 3))
-        tobii.iloc[tobii["Timestamp"] == 0, 1:] = np.nan
 
+        self.eye_event = tobii.loc[:]["Eye_movement_type"].values.astype(float)
+        self.tobii_time = tobii.loc[:]["Timestamp"].values.astype(float)
+        tobii.iloc[tobii["Timestamp"] == 0, 1:] = np.nan
         self.gaze_point = tobii.filter(regex='Gaze_point_3D').values
-        self.left_gaze_dir =  tobii.filter(regex='Gaze_direction_left').values
-        self.left_eye =  tobii.filter(regex='Pupil_position_left').values
+        self.left_gaze_dir = tobii.filter(regex='Gaze_direction_left').values
+        self.left_eye = tobii.filter(regex='Pupil_position_left').values
         self.right_eye = tobii.filter(regex='Pupil_position_right').values
         self.right_gaze_dir = tobii.filter(regex='Gaze_direction_right').values
 
         self.success_idx = ball["success_idx"]
         self.failures_idx = ball["failures_idx"]
+
+        # trajectories
+        self.wall_T = wall["trajectories"].values.reshape((-1, 4, 3))
+        self.table_T = table["trajectories"].values.reshape((-1, 4, 3))
+        table = table["trajectories"].values.reshape((-1, 3))
 
         # remove failure episodes from success
         self.success_idx = self.success_idx[~np.in1d(self.success_idx[:, 1], self.failures_idx[:, 1])]
@@ -64,18 +72,22 @@ class Classic:
             tobii_seg_T = self.tobii_segment_T[start: stop]
             tobii_seg_R = self.tobii_segment_R[start: stop]
 
-            self.gaze_point[start:stop] = self.tobii_reader.interPolateTransform(self.gaze_point[start:stop], tobii_seg_T,
-                                                                               tobii_seg_R)
-            self.left_eye[start:stop] = self.tobii_reader.interPolateTransform(self.left_eye[start:stop, [0, 2, 1]], tobii_seg_T,
-                                                                           tobii_seg_R)
-            self.right_eye[start:stop] = self.tobii_reader.interPolateTransform(self.right_eye[start:stop, [0, 2, 1]], tobii_seg_T,
-                                                                           tobii_seg_R)
+            # self.gaze_point[start:stop] = self.tobii_reader.interPolateTransform(self.gaze_point[start:stop, [0, 1, 2]], tobii_seg_T,
+            #                                                                    tobii_seg_R,translation=True)
+            # self.left_eye[start:stop] = self.tobii_reader.interPolateTransform(self.left_eye[start:stop, [0, 1, 2]], tobii_seg_T,
+            #                                                                tobii_seg_R)
+            # self.right_eye[start:stop] = self.tobii_reader.interPolateTransform(self.right_eye[start:stop, [0, 1, 2]], tobii_seg_T,
+            #                                                                tobii_seg_R)
+            #
+            #
+            # self.left_gaze_dir[start:stop] = self.tobii_reader.interPolateTransform(self.left_gaze_dir[start:stop, [0, 1, 2]], tobii_seg_T,
+            #                                                                tobii_seg_R, translation=True)
+            # self.right_gaze_dir[start:stop] = self.tobii_reader.interPolateTransform(self.right_gaze_dir[start:stop, [0, 1, 2]], tobii_seg_T,
+            #                                                                 tobii_seg_R, translation=True)
 
-
-            self.left_gaze_dir[start:stop] = self.tobii_reader.interPolateTransform(self.left_gaze_dir[start:stop], tobii_seg_T,
-                                                                           tobii_seg_R, translation=True)
-            self.right_gaze_dir[start:stop] = self.tobii_reader.interPolateTransform(self.right_gaze_dir[start:stop], tobii_seg_T,
-                                                                            tobii_seg_R, translation=True)
+            self.left_gaze_dir[start:stop] = self.tobii_reader.gapFill(self.left_gaze_dir[start:stop])
+            self.right_gaze_dir[start:stop] = self.tobii_reader.gapFill(self.right_gaze_dir[start:stop])
+            self.gaze_point[start:stop] = self.tobii_reader.gapFill(self.gaze_point[start:stop])
 
     def computeHistBouce(self, ball, episodes):
 
@@ -110,20 +122,19 @@ class Classic:
 
     def computeDistanceBounce(self, ball, episodes, segment):
 
-        segment_bounce = segment[episodes[:, 1] - 10] # position of the segment when the ball bounces on the table
-        segment_end = ball[episodes[:, 1]] # position of the last ball
+        segment_bounce = segment[episodes[:, 1] - 10]  # position of the segment when the ball bounces on the table
+        segment_end = ball[episodes[:, 1]]  # position of the last ball
 
         # raw_axis_dist = np.sqrt(np.square(segment[episodes[:, 3]] - ball[episodes[:, 1]]))
 
         raw_axis_dist = np.sqrt(np.square(segment[episodes[:, 1] - 10] - ball[episodes[:, 1]]))
         return np.linalg.norm(segment_end - segment_bounce, axis=-1), raw_axis_dist
 
-
     def computeDistanceOverTime(self, ball, segment, episode, n=15):
         dists = []
 
         for e in episode:
-            start = e[1] - (30- 1)
+            start = e[1] - (30 - 1)
             stop = e[1] + 1
 
             segment_t = segment[start:stop]
@@ -133,9 +144,6 @@ class Classic:
 
         return np.asarray(dists, dtype=float)
 
-
-
-
     def computeVelAcc(self, v):
 
         # vel = np.sum(np.abs(np.diff(v, n=1, axis=0)), axis=-1)
@@ -144,7 +152,7 @@ class Classic:
 
         v1 = v[:-1]
         v2 = v[1:]
-        speed = np.linalg.norm(v2-v1, axis=-1)
+        speed = np.linalg.norm(v2 - v1, axis=-1)
         vel = np.sum(np.diff(v, n=1, axis=0), axis=-1)
         acc = np.diff(speed, n=1, axis=-1)
 
@@ -155,6 +163,72 @@ class Classic:
         ball = np.array([movingAverage(ball[:, i], n=1) for i in range(3)]).transpose()
         return ball
 
+    def computeSaccadePursuit(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15):
+        '''
+        Detect the onset and offset of saccade and pursuit in 3 phases
+        :param th_al_p1:  degree/frame (saccade offset - ball trajectory) of AL in phase 1
+        :param th_al_p2:  degree/frame (saccade offset - ball trajectory) of AL in phase 2
+        :param th_angle_p:   degree/frame (saccade offset - ball trajectory) of pursuit in phase 3
+        :return:
+        % pursuit in phase 3
+        % AL in phase 1 and 2
+        % onset and offset AL in phase 1 and the min angle
+        % onset and offset AL in phase 2 and the angle (saccade_offset_gaze - pursuit_onset_ball, azimuth only)
+        % onset and offset pursuit in phase 3 and avg angle
+        '''
+
+        ball_n = self.tobii_reader.global2LocalGaze(self.ball_t, self.tobii_segment_T, self.tobii_segment_R,
+                                                    translation=True)
+
+        gaze_n = self.gaze_point
+
+        _, b_az, b_elv = cartesianToPolar(ball_n, swap=True)
+        _, g_az, g_elv = cartesianToPolar(gaze_n, swap=True)
+
+        az = g_az - b_az
+        elv = g_elv - b_elv
+        gaze_an = np.vstack([g_az, g_elv]).T
+        ball_an = np.vstack([b_az, b_elv]).T
+
+        p1_features_list = []
+        p2_features_list = []
+        p3_features_list = []
+        for se in episode:
+            # phase 1
+            p1_s = se[0]
+            p1_e = se[2]
+
+            # phase 2
+            p2_s = se[2]
+            p2_e = se[3]
+
+            # phase 3
+            p3_s = se[3]
+            p3_e = se[1]
+
+            phase1_features = detectALPhase1(self.eye_event[p1_s:p1_e], az[p1_s:p1_e], elv[p1_s:p1_e], th=th_al_p1)
+            phase2_features, phase3_features = detectALPhase2(self.eye_event[p2_s:p2_e], self.eye_event[p3_s:p3_e],
+                                                              gaze_an[p2_s:p3_e], ball_an[p2_s:p3_e], th=th_al_p2,
+                                                              th_angle_p=th_angle_p)
+
+            p1_features_list.append(phase1_features)
+            p2_features_list.append(phase2_features)
+            p3_features_list.append(phase3_features)
+
+        p1_features_list = np.vstack(p1_features_list)
+        p2_features_list = np.vstack(p2_features_list)
+        p3_features_list = np.vstack(p3_features_list)
+        features_summary = {
+            "al_p1_percentage": np.average(p1_features_list[:, 0] != 1e+4),
+            "al_p2_percentage": np.average(p2_features_list[:, 0] != 1e+4),
+            "pr_p2_percentage": np.average(p3_features_list[:, 0] != 1e+4),
+            "p1_features": p1_features_list[p1_features_list[:, 0] != 1e+4],
+            "p2_features": p2_features_list[p2_features_list[:, 0] != 1e+4],
+            "p3_features": p3_features_list[p3_features_list[:, 0] != 1e+4]
+        }
+
+        return features_summary
+
     def computeGazeBallAngle(self, n=20, relative=False, episodes=None):
         ball = self.ball_t
         tobii = self.tobii_segment_T
@@ -163,15 +237,17 @@ class Classic:
         r_eye_gd = self.right_gaze_dir
 
         ball_n = ball - tobii
+        # ball_n = ball_n[:, [0, 2]]
         ball_n = ball_n / np.linalg.norm(ball_n, axis=-1, keepdims=True)
 
         l_gaze_n = l_eye_gd - tobii
-        l_gaze_n = l_gaze_n / np.linalg.norm(l_gaze_n, axis=-1, keepdims=True)
-
         r_gaze_n = r_eye_gd - tobii
-        r_gaze_n = r_gaze_n / np.linalg.norm(r_gaze_n, axis=-1, keepdims=True)
-
         gaze_n = (l_gaze_n + r_gaze_n) / 2
+        # gaze_n = gaze_n[:, [0, 2]]
+        gaze_n = gaze_n / np.linalg.norm(gaze_n, axis=-1, keepdims=True)
+
+        # gaze_n = self.gaze_point - tobii
+        # gaze_n = gaze_n / np.linalg.norm(gaze_n, axis=-1, keepdims=True)
 
         if relative:
             def extract(episodes):
@@ -182,27 +258,59 @@ class Classic:
                     aug_ball_nt = np.ones_like(gaze_nt) * ball_nt
                     angle = np.rad2deg(np.arccos(np.clip(np.einsum('ij,ij->i', aug_ball_nt, gaze_nt), -1.0, 1.0)))
                     speed_angel = np.sqrt(np.square(angle[1:] - angle[:-1]))
-                    angle_list.append(angle)
+                    if (np.sum(np.isnan(angle)) == 0):
+                        angle_list.append(angle)
 
                     # plt.plot(angle)
+                    #
                     # plt.show()
 
                 return np.asarray(angle_list, dtype=float)
 
         else:
-            angles = np.rad2deg(np.arccos(np.clip(np.einsum('ij,ij->i', gaze_n, ball_n), -1.0, 1.0)))
+            angles = np.rad2deg(np.arccos(np.clip(np.einsum('ij,ij->i', ball_n, gaze_n), -1.0, 1.0)))
 
             def extract(episodes):
                 angle_list = []
                 for e in episodes:
+                    # print(e)
                     start = e[2] - n
-                    stop = e[2]  + n
+                    stop = e[2] + n
                     angles_t = angles[start: stop]
-                    angle_list.append(angles_t)
+
+                    idx_e = 2
+                    # print(angles[e[idx_e]])
+                    wall_n = self.wall_T[e[idx_e]] - self.tobii_segment_T[e[idx_e]]
+                    wall_n = wall_n / np.linalg.norm(wall_n, axis=-1, keepdims=True)
+
+                    table_n = self.table_T[e[idx_e]] - self.tobii_segment_T[e[idx_e]]
+                    table_n = table_n / np.linalg.norm(table_n, axis=-1, keepdims=True)
+                    # fig = plt.figure()
+                    # ax = fig.add_subplot(1, 1, 1, projection='3d')
+                    #
+                    # ax.scatter(0, 0, 0, color="black")
+                    # ax.scatter(ball_n[start:e[3] , 0], ball_n[start:e[3], 1], ball_n[start:e[3], 2], color="red")
+                    # ax.scatter(gaze_n[start:e[3], 0], gaze_n[start:e[3], 1], gaze_n[start:e[3], 2], color="green")
+                    # ax.scatter(wall_n[:, 0], wall_n[:, 1], wall_n[:, 2], color="blue")
+                    # ax.scatter(table_n[:, 0], table_n[:, 1], table_n[:, 2], color="orange")
+                    # plt.show()
+
+                    # plt.plot(angles_t)
+                    #
+                    # plt.show()
+
+                    if np.sum(np.isnan(angles_t)) == 0:
+                        angle_list.append(angles_t)
                 return np.asarray(angle_list, dtype=float)
 
         return extract(episodes)
 
+    def extractGazeBallPolar(self, n=50, episode_idx=2, n_group=2):
+
+        az_inc_success = self.computeSaccadePursuit(self.success_idx)
+        # az_inc_failures = self.computeGazeBallPolar(n, episode_idx, episodes=self.failures_idx, n_group=n_group)
+
+        return az_inc_success, az_inc_success
 
     def extractAnglesBeforeImpact(self, n=50):
 
@@ -210,7 +318,6 @@ class Classic:
         rhummer = self.racket_segment
 
         angles = np.rad2deg(self.computeSegmentAngles(rwirst, rhummer))
-
 
         def extract(episodes):
             angle_list = []
@@ -228,13 +335,13 @@ class Classic:
 
     def extractDistanceBeforeImpact(self, n=15):
         dist_success = self.computeDistanceOverTime(self.ball_t, self.racket_segment, self.success_idx, n=n)
-        dist_fail= self.computeDistanceOverTime(self.ball_t, self.racket_segment, self.failures_idx, n=n)
+        dist_fail = self.computeDistanceOverTime(self.ball_t, self.racket_segment, self.failures_idx, n=n)
 
         return np.diff(dist_success, n=0, axis=-1), np.diff(dist_fail, n=0, axis=-1)
 
-
     def extractDistanceRacketBeforeImpact(self, n=15):
         dist = np.linalg.norm(self.table_segment[:, 1:] - self.racket_segment[:, 1:], axis=-1)
+
         def extract(episodes):
             dist_list = []
             rt_list = []
@@ -269,9 +376,6 @@ class Classic:
 
         return dist_success, dist_fail, rt_success, rt_failure
 
-
-
-
     def extractBouncePoints(self):
         s_wall, s_table = self.computeHistBouce(self.ball_t, self.success_idx)
         f_wall, f_table = self.computeHistBouce(self.ball_t, self.failures_idx)
@@ -290,17 +394,12 @@ class Classic:
 
         return s_dist, f_dist, s_dist_raw, f_dist_raw
 
-
-
     def extractGazeBallAngle(self, n=20, relative=False):
-
 
         angles_success = self.computeGazeBallAngle(n, relative, self.success_idx)
         angles_fail = self.computeGazeBallAngle(n, relative, self.failures_idx)
 
         return angles_success, angles_fail
-
-
 
     def extractVelocityBallRacket(self):
         s_b, v_b, a_b = self.computeVelAcc(self.ball_t)
@@ -341,24 +440,20 @@ class Classic:
 
         return s_var, f_var
 
-
     def extractEvents(self):
-        bounce_table_s =  self.success_idx[:, 1] - self.success_idx[:, 2]
+        bounce_table_s = self.success_idx[:, 1] - self.success_idx[:, 2]
         bounce_wall_s = self.success_idx[:, 1] - self.success_idx[:, 3]
 
         bounce_table_f = self.failures_idx[:, 1] - self.failures_idx[:, 2]
         bounce_wall_f = self.failures_idx[:, 1] - self.failures_idx[:, 3]
 
-
         return bounce_table_s, bounce_wall_s, bounce_table_f, bounce_wall_f
-
 
     def extractImpactPositions(self):
         impact_s = self.ball_t[self.success_idx[:, 1]]
         impact_f = self.ball_t[self.failures_idx[:, 1]]
 
         return impact_s, impact_f
-
 
     def extractPrevCurrentImpactPositions(self):
         def extract(ref_episodes, episodes, idx):
@@ -374,12 +469,10 @@ class Classic:
 
             return np.asarray(dist_list)
 
-
         dist_pc_s = extract(self.success_idx, self.success_idx, self.prev_s_idx)
         dist_pc_f = extract(self.success_idx, self.failures_idx, self.prev_f_idx)
 
         return dist_pc_s, dist_pc_f
-
 
     def extractPrevVelocityBallRacket(self):
         s_b, v_b, a_b = self.computeVelAcc(self.ball_t)
@@ -399,13 +492,10 @@ class Classic:
 
             return np.asarray(vb_list, dtype=float), np.asarray(vr_list, dtype=float), np.asarray(vr_all, dtype=float)
 
-
         vs_b, vs_r, vs_rall = computeVelocityBeforeImpact(self.success_idx[self.prev_s_idx[:, 0]])
         vf_b, vf_r, vf_rall = computeVelocityBeforeImpact(self.success_idx[self.prev_f_idx[:, 0]])
 
         return vs_b, vs_r, vf_b, vf_r, vs_rall, vf_rall
-
-
 
     def extractPrevDistanceRacketBeforeImpact(self, n=15):
         dist = np.linalg.norm(self.table_segment[:, 1:] - self.racket_segment[:, 1:], axis=-1)
@@ -434,7 +524,6 @@ class Classic:
                     rt_list.append(rt)
                 dist_list.append(angles_t)
 
-
             return np.asarray(dist_list, dtype=float), np.asarray(rt_list, dtype=float)
 
         dist_success, rt_success = extract(self.success_idx[self.prev_s_idx[:, 0]])
@@ -444,11 +533,11 @@ class Classic:
 
     def extractPrevGazeBallAngle(self, n=20, relative=False):
 
-
         angles_success = self.computeGazeBallAngle(n, relative, self.success_idx[self.prev_s_idx[:, 0]])
         angles_fail = self.computeGazeBallAngle(n, relative, self.success_idx[self.prev_f_idx[:, 0]])
 
         return angles_success, angles_fail
+
 
 class Visualization:
 
@@ -461,6 +550,7 @@ class Visualization:
         ax.scatter(failures[:, 0], failures[:, 1], failures[:, 2])
 
         plt.show()
+
     def plotWallHist(self, success_bounce, fail_bounces, wall):
         success_label = ["success"] * len(success_bounce)
         fail_label = ["failures"] * len(fail_bounces)
@@ -494,7 +584,6 @@ class Visualization:
         # g._legend.remove()
         plt.savefig('F:\\users\\prasetia\\projects\\Animations\\Poster-2023-08-05\\angles.eps', format='eps')
 
-
         plt.show()
 
     def plotMultipleHist(self, success_ball, success_racket, fail_ball, fail_racket):
@@ -505,8 +594,10 @@ class Visualization:
         success_idx = np.random.choice(len(success_racket), len(fail_racket))
         success_racket = success_racket[success_idx]
 
-        types = (["ball"]  * len(success_ball)) + (["ball"]  * len(fail_ball)) + (["racket"]  * len(success_racket)) + (["racket"]  * len(fail_racket))
-        labels = (["success"]  * len(success_ball)) + (["fail"]  * len(fail_ball)) + (["success"]  * len(success_racket)) + (["fail"]  * len(fail_racket))
+        types = (["ball"] * len(success_ball)) + (["ball"] * len(fail_ball)) + (["racket"] * len(success_racket)) + (
+                    ["racket"] * len(fail_racket))
+        labels = (["success"] * len(success_ball)) + (["fail"] * len(fail_ball)) + (
+                    ["success"] * len(success_racket)) + (["fail"] * len(fail_racket))
         acc = np.hstack([success_ball, fail_ball, success_racket, fail_racket])
 
         df = pd.DataFrame({"acceleration": acc, "type": types, "label": labels})
@@ -547,25 +638,23 @@ class Visualization:
         #
         # )
 
-
         # plt.savefig('F:\\users\\prasetia\\projects\\Animations\\Poster-2023-08-05\\distance_axis.eps', format='eps')
         plt.show()
 
     def plotLine(self, success_y, fail_y):
         np.random.seed(2025)
 
-
-        success_idx = np.random.choice(len(success_y), len(fail_y))
-        success_y = success_y[success_idx]
+        # success_idx = np.random.choice(len(success_y), len(fail_y))
+        # success_y = success_y[success_idx]
 
         n = success_y.shape[-1]
-        n_2 = int(n/2)
+        n_2 = int(n / 2)
 
         # time_point = (np.arange(-n, 0).astype(str).tolist() * len(success_y)) + (
         #             np.arange(-n, 0).astype(str).tolist() * len(fail_y))
 
         time_point = (np.arange(-n_2, n_2).astype(str).tolist() * len(success_y)) + (
-                    np.arange(-n_2, n_2).astype(str).tolist() * len(fail_y))
+                np.arange(-n_2, n_2).astype(str).tolist() * len(fail_y))
         labels = (["success"] * (n * len(success_y))) + (["fail"] * (n * len(fail_y)))
 
         data = np.concatenate([success_y.flatten(), fail_y.flatten()])
@@ -588,9 +677,8 @@ class Visualization:
         success_idx = np.random.choice(len(success_y), len(fail_y))
         success_y = success_y[success_idx]
 
-        prev_success_idx =  np.random.choice(len(prev_success_y), len(prev_fail_y))
+        prev_success_idx = np.random.choice(len(prev_success_y), len(prev_fail_y))
         prev_success_y = prev_success_y[prev_success_idx]
-
 
         n = success_y.shape[-1]
         n_2 = int(n / 2)
@@ -601,10 +689,11 @@ class Visualization:
         #              (np.arange(-n, 0).astype(str).tolist() * len(prev_fail_y))
 
         time_point = (np.arange(-n_2, n_2).astype(str).tolist() * len(success_y)) + (
-                    np.arange(-n_2, n_2).astype(str).tolist() * len(fail_y)) +  (
-                    np.arange(-n_2, n_2).astype(str).tolist() * len(prev_success_y)) + (
-                    np.arange(-n_2, n_2).astype(str).tolist() * len(prev_fail_y))
-        labels = (["success"] * (n * len(success_y))) + (["fail"] * (n * len(fail_y))) + (["pre_success"] * (n * len(prev_success_y))) + \
+                np.arange(-n_2, n_2).astype(str).tolist() * len(fail_y)) + (
+                             np.arange(-n_2, n_2).astype(str).tolist() * len(prev_success_y)) + (
+                             np.arange(-n_2, n_2).astype(str).tolist() * len(prev_fail_y))
+        labels = (["success"] * (n * len(success_y))) + (["fail"] * (n * len(fail_y))) + (
+                    ["pre_success"] * (n * len(prev_success_y))) + \
                  (["prev_fail"] * (n * len(prev_fail_y)))
 
         data = np.concatenate([success_y.flatten(), fail_y.flatten(), prev_success_y.flatten(), prev_fail_y.flatten()])
@@ -617,16 +706,13 @@ class Visualization:
         g.set(xlabel=None)
         g.set(ylabel=None)
 
-
         # plt.savefig('F:\\users\\prasetia\\projects\\Animations\\Poster-2023-08-05\\accelerate_decelarate.eps', format='eps')
         plt.show()
 
     def plotLine2(self, success_y, fail_y, success_event, failure_event):
         np.random.seed(2023)
 
-
-        ev =  -1 * int(np.average(np.concatenate([success_event, failure_event])))
-
+        ev = -1 * int(np.average(np.concatenate([success_event, failure_event])))
 
         success_idx = np.random.choice(len(success_y), len(fail_y))
         success_y = success_y[success_idx]
@@ -634,8 +720,8 @@ class Visualization:
 
         n = success_y.shape[-1]
 
-
-        time_point = (np.arange(-n, 0).astype(str).tolist() * len(success_y)) + (np.arange(-n, 0).astype(str).tolist() * len(fail_y))
+        time_point = (np.arange(-n, 0).astype(str).tolist() * len(success_y)) + (
+                    np.arange(-n, 0).astype(str).tolist() * len(fail_y))
         labels = (["success"] * (n * len(success_y))) + (["fail"] * (n * len(fail_y)))
 
         data = np.concatenate([success_y.flatten(), fail_y.flatten()])
@@ -671,12 +757,12 @@ class Visualization:
         prev_success_idx = np.random.choice(len(prev_success), len(prev_fail))
         prev_success = prev_success[prev_success_idx]
 
-
         print(np.average(success))
         print(np.average(fail))
         print(np.average(prev_success))
         print(np.average(prev_fail))
-        labels = (["success"] * len(success)) + (["fail"] *  len(fail)) + (["prev_success"] *  len(prev_success))  + (["prev_fail"] *  len(prev_fail))
+        labels = (["success"] * len(success)) + (["fail"] * len(fail)) + (["prev_success"] * len(prev_success)) + (
+                    ["prev_fail"] * len(prev_fail))
 
         data = np.concatenate([success.flatten(), fail.flatten(), prev_success.flatten(), prev_fail.flatten()])
 
@@ -688,11 +774,38 @@ class Visualization:
                       size=4, color=".3", linewidth=0)
         # g = sns.displot(x='RT', hue='label', data=df, kind="kde", fill=True)
 
-
         sns.despine(offset=10, trim=True, left=True)
         g.set(xlabel=None)
         g.set(ylabel=None)
 
+        plt.show()
+
+    def plotScatter(self, success, fail, n=20, step=2):
+        # success_idx = np.random.choice(len(success), len(fail))
+        # success = success[success_idx]
+
+        labels = (["success"] * len(success) * 20)
+        time_point = (np.arange(-n, n, step).astype(str).tolist() * len(success))
+
+        data = np.concatenate([success.reshape((-1, 2))])
+        df = pd.DataFrame({"time_point": [float(i) for i in time_point], "azimuth": data[:, 0], "elevation": data[:, 1],
+                           "label": labels})
+
+        g = sns.FacetGrid(df, col="time_point", hue="label", col_wrap=5, height=2, ylim=(-45, 45), xlim=(-60, 60))
+        g.map(sns.scatterplot, "azimuth", "elevation", alpha=0.5)
+        # g.map(sns.kdeplot, "azimuth", "elevation", alpha=0.5, fill=True)
+        g.refline(x=0,
+                  y=0,
+                  color="black",
+                  lw=1)
+        g.refline(x=5,
+                  y=5,
+                  color="red",
+                  lw=1)
+        g.refline(x=-5,
+                  y=-5,
+                  color="red",
+                  lw=1)
 
         plt.show()
 
@@ -703,20 +816,21 @@ if __name__ == '__main__':
     reader = SubjectObjectReader()
     visual = Visualization()
     paths = [
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-08_A\\2022-11-08_A_T01_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-08_A\\2022-11-08_A_T01_complete.pkl",
         "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-08_A\\2022-11-08_A_T03_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-08_A\\2022-11-08_A_T04_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T07_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T04_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T02_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T04_complete.pkl",
-        "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T03_complete.pkl"
-        ]
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-08_A\\2022-11-08_A_T04_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T07_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T04_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T03_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T02_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T04_complete.pkl",
+        # "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-02-08_A\\2023-02-08_A_T03_complete.pkl"
+    ]
 
-#     paths = [
-#
-#              "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T04_complete.pkl",
-# ]
+    #     paths = [
+    #
+    #              "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-09_A\\2022-11-09_A_T04_complete.pkl",
+    # ]
 
     s_w_list = []
     s_t_list = []
@@ -734,6 +848,7 @@ if __name__ == '__main__':
     s_gbar_list = []
     s_impct_list = []
     s_rt_list = []
+    s_azinc_list = []
 
     s_pc_impct_list = []
     s_p_rall_list = []
@@ -757,6 +872,7 @@ if __name__ == '__main__':
     f_gbar_list = []
     f_impct_list = []
     f_rt_list = []
+    f_azinc_list = []
 
     f_pc_impct_list = []
     f_p_rall_list = []
@@ -764,29 +880,32 @@ if __name__ == '__main__':
     f_p_rt_list = []
     f_p_gba_list = []
 
-    #events
+    # events
     bts_list = []
     bws_list = []
-    btf_list =  []
+    btf_list = []
     bwf_list = []
 
     for p in paths:
         obj, sub, ball, tobii = reader.extractData(p)
         racket = None
         table = None
+        wall = None
         for o in obj:
             if "racket" in o["name"].lower():
                 racket = o
             if "table" in o["name"].lower():
                 table = o
+            if "wall" in o["name"].lower():
+                wall = o
         print(p)
-        feature = Classic(sub[0], racket, ball[0], tobii[0], table)
+        feature = Classic(sub[0], racket, ball[0], tobii[0], table, wall)
         bts, bws, btf, bwf = feature.extractEvents()
         s_wall, s_table, f_wall, f_table = feature.extractBouncePoints()
         s_a, f_a = feature.extractAnglePersonBall()
         s_d, f_d, s_draw, f_draw = feature.extractDistanceBounceEnd()
         s_vb, s_vr, f_vb, f_vr, s_rall, f_rall = feature.extractVelocityBallRacket()
-        s_var, f_var =  feature.extractVarinceMovementBI()
+        s_var, f_var = feature.extractVarinceMovementBI()
         s_do, f_do = feature.extractDistanceBeforeImpact(n=5)
         s_arm, f_arm = feature.extractAnglesBeforeImpact(n=30)
         s_dracket, f_dracket, s_rt, f_rt = feature.extractDistanceRacketBeforeImpact(n=70)
@@ -794,14 +913,14 @@ if __name__ == '__main__':
         s_gbr_a, f_gbr_a = feature.extractGazeBallAngle(n=20, relative=True)
         s_impct, f_impct = feature.extractImpactPositions()
 
-
+        s_azinc, f_azinc = feature.extractGazeBallPolar(n=20, episode_idx=0, n_group=2)
 
         s_pc_impct, f_pc_impct = feature.extractPrevCurrentImpactPositions()
         s_p_vb, s_p_vr, f_p_vb, f_p_vr, s_p_rall, f_p_rall = feature.extractPrevVelocityBallRacket()
         s_p_dracket, f_p_dracket, s_p_rt, f_p_rt = feature.extractPrevDistanceRacketBeforeImpact(n=70)
         s_p_gba, f_p_gba = feature.extractPrevGazeBallAngle(n=20, relative=False)
 
-        #add events
+        # add events
         bts_list.append(bts)
         bws_list.append(bws)
         btf_list.append(btf)
@@ -823,6 +942,7 @@ if __name__ == '__main__':
         s_impct_list.append(s_impct)
         s_dracket_list.append(s_dracket)
         s_rt_list.append(s_rt)
+        s_azinc_list.append(s_azinc)
 
         s_pc_impct_list.append(s_pc_impct)
         s_p_rall_list.append(s_p_rall)
@@ -846,13 +966,13 @@ if __name__ == '__main__':
         f_impct_list.append(f_impct)
         f_dracket_list.append(f_dracket)
         f_rt_list.append(f_rt)
+        f_azinc_list.append(f_azinc)
 
         f_pc_impct_list.append(f_pc_impct)
         f_p_rall_list.append(f_p_rall)
         f_p_dracket_list.append(f_p_dracket)
         f_p_rt_list.append(f_p_rt)
         f_p_gba_list.append(f_p_gba)
-
 
     wall_tr = None
     table_tr = None
@@ -863,6 +983,7 @@ if __name__ == '__main__':
         if o["name"].lower() == "wall":
             wall_tr = np.average(o["trajectories"].values, axis=0)
 
+    visual.plotScatter(np.concatenate(s_azinc_list, 0), np.concatenate(f_azinc_list, 0))
     # visual.plot3D(np.concatenate(s_impct_list, 0), np.concatenate(f_impct_list, 0))
 
     # visual.plotWallHist(np.concatenate(s_w_list, 0), np.concatenate(f_w_list, 0), wall_tr)
@@ -874,7 +995,7 @@ if __name__ == '__main__':
     # visual.plotLine(np.concatenate(s_dracket_list, 0), np.concatenate(f_dracket_list, 0))
 
     # visual.plotLine(np.concatenate(s_gba_list, 0), np.concatenate(f_gba_list, 0))
-    visual.plotLine(np.concatenate(s_gbar_list, 0), np.concatenate(f_gbar_list, 0))
+    # visual.plotLine(np.concatenate(s_gbar_list, 0), np.concatenate(f_gbar_list, 0))
 
     # visual.plotLine(np.concatenate(s_rall_list, 0), np.concatenate(f_rall_list, 0))
 

@@ -96,63 +96,65 @@ class SegmentsCleaner:
 
 
 
+if __name__ == '__main__':
 
-ref_file = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\Tobii_ref.csv"
-file_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\"
-result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
-ref_df = pd.read_csv(ref_file)
-single_df = ref_df.loc[ref_df.Trial_Type=="S"]
+    ref_file = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\Tobii_ref.csv"
+    file_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\"
+    result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
+    ref_df = pd.read_csv(ref_file)
+    single_df = ref_df.loc[ref_df.Trial_Type=="S"]
 
-for i, d in single_df.iterrows():
-    dates = d["Date"].replace(".", "-")
-    session = d["Session"]
-    trial = d["Trial"]
+    for i, d in single_df.iterrows():
+        dates = d["Date"].replace(".", "-")
+        session = d["Session"]
+        trial = d["Trial"]
 
-    folder_name = dates + "_" + session
-    file_name = folder_name + "_" + trial
+        folder_name = dates + "_" + session
+        file_name = folder_name + "_" + trial
 
-    file_session_path = file_path+folder_name+"\\"
-    result_session_path = result_path+folder_name+"\\"
+        if file_name == "2023-01-16_A_T03":
+            file_session_path = file_path+folder_name+"\\"
+            result_session_path = result_path+folder_name+"\\"
 
-    checkMakeDir(result_session_path)
-    reader = ViconReader()
-    obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
-    cleaner = SegmentsCleaner()
-    for s in sub:
-
-
-
-        # tobii cleaning
-        start_idx = (18 * 6) + 3
-        tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
-        tobii_trajectories = s["trajectories"].filter(regex='Tobii').values
-        tobii_cs = np.copy(tobii_segment)
-        tobii_ct = np.copy(tobii_trajectories)
-        new_tobii_segment, tobii_cleaned_p = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
-        s["segments"].filter(regex='TobiiGlass_T').loc[:] = new_tobii_segment
-        # right wirst cleaning
-        start_idx = (15 * 6) + 3
-        rwrist_segment = s["segments"].filter(regex='R_Wrist_T').values
-        rwrist_trajectories = s["trajectories"].filter(regex='(RWRA|RWRB)').values
-        rwrist_cs = np.copy(rwrist_segment)
-        rwrist_ct = np.copy(rwrist_trajectories)
-        new_rwrist_segment, rwirst_cleaned_p = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
-        s["segments"].filter(regex='R_Wrist_T').loc[:] = new_rwrist_segment
-        # left wirst cleaning
-        start_idx = (6 * 6) + 3
-        lwrist_segment = s["segments"].filter(regex='L_Wrist_T').values
-        lwrist_trajectories = s["trajectories"].filter(regex='(LWRA|LWRB)').values
-        lwrist_cs = np.copy(lwrist_segment)
-        lwrist_ct = np.copy(lwrist_trajectories)
-        new_lwrist_segment, lwirst_cleaned_p = cleaner.wristCleaning(lwrist_cs, lwrist_ct)
-        s["segments"].filter(regex='L_Wrist_T').loc[:] = new_lwrist_segment
-
-        print("%s, %s, %f, %f, %f" % (file_name, s["name"], tobii_cleaned_p, rwirst_cleaned_p, lwirst_cleaned_p))
+            checkMakeDir(result_session_path)
+            reader = ViconReader()
+            obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
+            cleaner = SegmentsCleaner()
+            for s in sub:
 
 
 
-    import pickle
-    data = [obj, sub]
+                # tobii cleaning
+                start_idx = (18 * 6) + 3
+                tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
+                tobii_trajectories = s["trajectories"].filter(regex='Tobii').values
+                tobii_cs = np.copy(tobii_segment)
+                tobii_ct = np.copy(tobii_trajectories)
+                new_tobii_segment, tobii_cleaned_p = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
+                s["segments"].filter(regex='TobiiGlass_T').loc[:] = new_tobii_segment
+                # right wirst cleaning
+                start_idx = (15 * 6) + 3
+                rwrist_segment = s["segments"].filter(regex='R_Wrist_T').values
+                rwrist_trajectories = s["trajectories"].filter(regex='(RWRA|RWRB)').values
+                rwrist_cs = np.copy(rwrist_segment)
+                rwrist_ct = np.copy(rwrist_trajectories)
+                new_rwrist_segment, rwirst_cleaned_p = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
+                s["segments"].filter(regex='R_Wrist_T').loc[:] = new_rwrist_segment
+                # left wirst cleaning
+                start_idx = (6 * 6) + 3
+                lwrist_segment = s["segments"].filter(regex='L_Wrist_T').values
+                lwrist_trajectories = s["trajectories"].filter(regex='(LWRA|LWRB)').values
+                lwrist_cs = np.copy(lwrist_segment)
+                lwrist_ct = np.copy(lwrist_trajectories)
+                new_lwrist_segment, lwirst_cleaned_p = cleaner.wristCleaning(lwrist_cs, lwrist_ct)
+                s["segments"].filter(regex='L_Wrist_T').loc[:] = new_lwrist_segment
 
-    with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
-        pickle.dump(data, f)
+                print("%s, %s, %f, %f, %f" % (file_name, s["name"], tobii_cleaned_p, rwirst_cleaned_p, lwirst_cleaned_p))
+
+
+
+            import pickle
+            data = [obj, sub]
+
+            with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
+                pickle.dump(data, f)

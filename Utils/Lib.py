@@ -6,9 +6,49 @@ from scipy.signal import savgol_filter
 
 from scipy.signal import wiener
 import transforms3d
-
+from scipy.spatial.transform import Rotation as R
 import os
+from scipy.signal import butter, lfilter
 
+
+def fit180(deg):
+
+    x = deg % 360
+
+
+    x[x>180] = x[x>180] - 360
+    x[x < -180] = x[x < -180] + 360
+
+    return x
+
+
+def cartesianToPolar(vector, swap=False):
+    xyz = np.copy(vector)
+    if swap:
+
+        R_m = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for i in range(len(xyz))])
+        xyz = np.squeeze(np.matmul(R_m, np.expand_dims(xyz, 2)))
+
+
+    xy = xyz[:, 0] ** 2 + xyz[:, 1] ** 2
+    r = np.sqrt(xy + xyz[:, 2] ** 2)
+    # elv = np.arctan2(np.sqrt(xy), xyz[:, 2])*180/ np.pi   # for elevation angle defined from Z-axis down
+    elv = np.rad2deg(np.arctan2(xyz[:, 2], np.sqrt(xy))) # for elevation angle defined from XY-plane up
+    az = np.rad2deg(np.arctan2(xyz[:, 0], xyz[:, 1]))
+
+    az = fit180(az)
+
+
+
+    return r, az , elv
+
+def butterLowPass(lowcut, fs, order=5):
+    return butter(order, lowcut, fs=fs, btype='low')
+
+def butterLowPassFilter(data, lowcut, fs, order=5):
+    b, a = butterLowPass(lowcut, fs, order=order)
+    y = lfilter(b, a, data)
+    return y
 
 def checkMakeDir(path):
     isExist = os.path.exists(path)

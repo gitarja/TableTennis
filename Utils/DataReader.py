@@ -1,4 +1,6 @@
 import csv
+
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import math
@@ -69,16 +71,45 @@ class TobiiReader:
 
     def local2GlobalGaze(self, gaze, tobii_seg, tobii_rot, translation=True):
 
+        R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
+        R_x2 = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
+        # gaze = np.squeeze(np.matmul(R_x, np.expand_dims(gaze, 2)))
 
         R_m = np.array([R.from_rotvec(r, degrees=True).as_matrix() for r in tobii_rot])
-        # R_m = np.array([transforms3d.axangles.axangle2mat(r, np.sqrt(np.sum(r ** 2))) for r in rads])
 
         gaze_global = np.squeeze(np.matmul(R_m, np.expand_dims(gaze, 2)))
+        # gaze_global = np.squeeze(np.matmul(R_x2, np.expand_dims(gaze_global, 2)))
+        if translation:
+            gaze_global = gaze_global + tobii_seg
+
+
+
+
+
+        return gaze_global
+
+    def global2LocalGaze(self, segment, tobii_seg, tobii_rot, translation=False):
+
+        R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for i in range(len(tobii_rot))])
+        # R_x = np.array([np.squeeze(R.from_euler("zx", [180, 90], degrees=True).as_matrix()) for i in range(len(tobii_rot))])
+
+        # segment = np.squeeze(np.matmul(R_x, np.expand_dims(segment, 2)))
+        # tobii_seg = np.squeeze(np.matmul(R_x, np.expand_dims(tobii_seg, 2)))
+        # tobii_rot = np.squeeze(np.matmul(R_x, np.expand_dims(tobii_rot, 2)))
 
         if translation:
-            return gaze_global + tobii_seg
-        else:
-            return gaze_global
+            segment = segment - tobii_seg
+
+
+        R_m = np.array([np.linalg.inv(R.from_rotvec(r, degrees=True).as_matrix()) for r in tobii_rot])
+        seg_local = np.squeeze(np.matmul(R_m, np.expand_dims(segment, 2)))
+
+        # seg_local = np.squeeze(np.matmul(R_x, np.expand_dims(seg_local, 2)))
+
+        return seg_local
+
+
+
 
     def local2GlobalRot(self, seg, tobii_rot):
 
@@ -92,6 +123,8 @@ class TobiiReader:
     def interPolate(self, g):
         mask = np.isnan(g)
         if np.sum(mask) > 0:
+            # f = interp1d( np.flatnonzero(~mask), g[~mask])
+            # g[mask] = f(np.flatnonzero(mask))
             g[mask] = np.interp(np.flatnonzero(mask), np.flatnonzero(~mask), g[~mask])
 
         return g
