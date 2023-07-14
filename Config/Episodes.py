@@ -27,7 +27,7 @@ class EpisodesParamsDouble:
 
 
 class EpisodesParamsSingle:
-    TH_CONFIDENCE = 0.4  # threshold for valleys detection
+    TH_CONFIDENCE = 0.5  # threshold for valleys detection
     TH_D_RACKET = 200  # threshold for distance
     TH_WITHIN_RACKET = 30  # threshold for groupping valleys index
     TH_WITHIN = 11  # threshold for groupping valleys index
@@ -42,7 +42,7 @@ class EpisodesParamsSingle:
 
     def __init__(self, type="clean_ball"):
         if type == "clean_ball":
-            self.TH_CONFIDENCE = 0.4  # threshold for valleys detection
+            self.TH_CONFIDENCE = 0.65  # threshold for valleys detection
             self.TH_D_RACKET = 150  # threshold for distance
             self.TH_WITHIN_RACKET = 30  # threshold for groupping valleys index
             self.TH_WITHIN = 11  # threshold for groupping valleys index
@@ -50,5 +50,5 @@ class EpisodesParamsSingle:
             self.TH_D_TABLE = 150  # threshold for table
             self.TH_RACKET_SANITY = 230  # threshold for episode sanity
             self.TH_SUCCESS_EPISODES = 150  # threshold for success episode
-            self.TH_FAILURE_MID_EPISODES = 150  # threshold for the duration between success and failure episode
+            self.TH_FAILURE_MID_EPISODES = 100  # threshold for the duration between success and failure episode
             self.TH_FAILURE_SANITY = 100 # threshold for two consecutive failure

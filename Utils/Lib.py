@@ -22,7 +22,7 @@ def fit180(deg):
     return x
 
 
-def cartesianToPolar(vector, swap=False):
+def cartesianToSpher(vector, swap=False):
     xyz = np.copy(vector)
     if swap:
 
@@ -34,7 +34,7 @@ def cartesianToPolar(vector, swap=False):
     r = np.sqrt(xy + xyz[:, 2] ** 2)
     # elv = np.arctan2(np.sqrt(xy), xyz[:, 2])*180/ np.pi   # for elevation angle defined from Z-axis down
     elv = np.rad2deg(np.arctan2(xyz[:, 2], np.sqrt(xy))) # for elevation angle defined from XY-plane up
-    az = np.rad2deg(np.arctan2(xyz[:, 0], xyz[:, 1]))
+    az = np.rad2deg(np.arctan2(xyz[:, 1], xyz[:, 0])) - 90
 
     az = fit180(az)
 

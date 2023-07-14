@@ -71,8 +71,8 @@ class TobiiReader:
 
     def local2GlobalGaze(self, gaze, tobii_seg, tobii_rot, translation=True):
 
-        R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
-        R_x2 = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
+        # R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
+        # R_x2 = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
         # gaze = np.squeeze(np.matmul(R_x, np.expand_dims(gaze, 2)))
 
         R_m = np.array([R.from_rotvec(r, degrees=True).as_matrix() for r in tobii_rot])
@@ -90,7 +90,7 @@ class TobiiReader:
 
     def global2LocalGaze(self, segment, tobii_seg, tobii_rot, translation=False):
 
-        R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for i in range(len(tobii_rot))])
+        # R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for i in range(len(tobii_rot))])
         # R_x = np.array([np.squeeze(R.from_euler("zx", [180, 90], degrees=True).as_matrix()) for i in range(len(tobii_rot))])
 
         # segment = np.squeeze(np.matmul(R_x, np.expand_dims(segment, 2)))

@@ -27,11 +27,11 @@ def findValleys(dist:np.array, th_c:float, th_d:float) -> np.array:
     return valleys
 
 
-def removeSpecialValleyTable(v_table:np.array, v_racket: np.array, th:int=5):
+def removeSpecialValleyTable(v_table:np.array, v_racket: np.array, th:int=8):
     removed_idx = []
     for v in v_racket:
         dist = v_table - v
-        idx = np.argwhere((dist >= -th)& (dist<=2) )
+        idx = np.argwhere((dist >= -th)& (dist<=th) )
         if len(idx) > 0:
             removed_idx.append(idx)
 

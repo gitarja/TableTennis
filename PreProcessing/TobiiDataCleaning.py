@@ -37,13 +37,13 @@ class TobiiCleaner:
         stop = ref.Stop_TTL.values[0] * 1000
         vicon_frame = ref.Vicon_Frame.values[0]
 
-        print(start)
+        # print(start)
         # start = start - (int(ref.Offset.values[0]) * 10)
         # stop  = stop + (int(ref.Offset.values[0]) * 10)
         cut_data = data[
             (data["Recording timestamp"] >= start) & (data["Recording timestamp"] <= stop) & (
                     data["Sensor"] == "Eye Tracker")]
-        print(100 * len(cut_data) / vicon_frame)
+        # print(100 * len(cut_data) / vicon_frame)
         # print(stop - start)
         # print(len(cut_data))
         # print(vicon_frame)
@@ -80,15 +80,16 @@ class TobiiCleaner:
         closest_points = np.nanmin(dist_mat, axis=-1)
         closest_idx = np.nanargmin(dist_mat, axis=-1)
         selected_idx = np.argwhere((closest_points <= 15) & (valid))[:, 0]
-        tobii_df.iloc[8 + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][
+        tobii_df.iloc[10 + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][
             selected_columns]
         for i in range(1, len(tobii_df)):
-            tobii_df.loc[i, 'Eye_movement_type'] = eventToNumeric(tobii_df.loc[i-1, 'Eye_movement_type'], tobii_df.loc[i, 'Eye_movement_type'])
-        print(int(ref.Offset.values[0]))
+            tobii_df.loc[i, 'Eye_movement_type'] = eventToNumeric(tobii_df.loc[i - 1, 'Eye_movement_type'],
+                                                                  tobii_df.loc[i, 'Eye_movement_type'])
+        # print(int(ref.Offset.values[0]))
         # tobii_df.iloc[ int(ref.Offset.values[0]) + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][selected_columns]
 
-        print(100 * (np.sum(tobii_df.Timestamp.values != 0) / vicon_frame))
-        return participant, tobii_df
+        percentage_fill = 100 * (np.sum(tobii_df.Timestamp.values != 0) / vicon_frame)
+        return participant, tobii_df, percentage_fill
 
 
 if __name__ == '__main__':
@@ -107,22 +108,36 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if file_name == "2022-11-08_A_T03":
-            reader = SubjectObjectReader()
-            obj, sub, ball = reader.extractData(
-                result_path + folder_name + "\\" + file_name + "_wb.pkl")
+        if "2022-11-08_A_T01" in file_name:
 
-            tobii_results = []
-            for s in sub:
-                reader = TobiiCleaner(ref_file)
-                tobii_filename = file_name.split("_")[-1] + "_" + s["name"] + ".tsv"
-                tobii_files = glob.glob(result_path + folder_name + "\\Tobii\\*" + tobii_filename + "")
-                participant, tobii_df = reader.matchData(tobii_files[0])
-                tobii_results.append({"name": participant, "trajectories": tobii_df})
+            try:
+                reader = SubjectObjectReader()
+                obj, sub, ball = reader.extractData(
+                    result_path + folder_name + "\\" + file_name + "_wb.pkl")
 
-            data = [obj, sub, ball, tobii_results]
+                tobii_results = []
+                for s in sub:
+                    reader = TobiiCleaner(ref_file)
+                    tobii_filename = file_name.split("_")[-1] + "_" + s["name"] + ".tsv"
+                    tobii_files = glob.glob(result_path + folder_name + "\\Tobii\\*" + tobii_filename + "")
+                    participant, tobii_df, percentage_fill = reader.matchData(tobii_files[0])
+                    tobii_results.append({"name": participant, "trajectories": tobii_df})
 
-            with open(
-                    result_path + folder_name + "\\" + file_name + "_complete.pkl",
-                    'wb') as f:
-                pickle.dump(data, f)
+                data = [obj, sub, ball, tobii_results]
+
+                # check ball bounce
+                import random
+
+                success_idx = ball[0]["success_idx"]
+                for se in success_idx:
+                    if (tobii_df.loc[se[2]]["Timestamp"] != 0):
+                        break
+                print("%s, %f,  %f" % (file_name, percentage_fill, tobii_df.loc[se[2]]["Timestamp"]))
+
+                with open(
+                        result_path + folder_name + "\\" + file_name + "_complete.pkl",
+                        'wb') as f:
+                    pickle.dump(data, f)
+            except:
+
+                print("Error: " + file_name)
