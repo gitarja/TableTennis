@@ -3,7 +3,7 @@ import numpy as np
 import ezc3d
 import pandas as pd
 from Utils.DataReader import TobiiReader
-from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToPolar
+from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToSpher
 import matplotlib.pyplot as plt
 def filteringUnLabData(data, tobii_data):
     # transform matrix
@@ -97,8 +97,8 @@ tobii_time = tobii.filter(regex='Timestamp').values
 tobii_reader = TobiiReader()
 ball_n_global = tobii_reader.global2LocalGaze(ball_t, tobii_T, tobii_R, translation=True)
 
-_, b_az_g, b_inc_g = cartesianToPolar(ball_n_global, swap=True)
-_, g_az_g, g_inc_g = cartesianToPolar(gaze_point, swap=True)
+_, b_az_g, b_inc_g = cartesianToSpher(ball_n_global, swap=True)
+_, g_az_g, g_inc_g = cartesianToSpher(gaze_point, swap=True)
 
 dist_angle_g = np.sqrt(np.square(b_az_g - g_az_g) + np.square(b_inc_g - g_inc_g))
 
@@ -107,8 +107,8 @@ dist_angle_g = np.sqrt(np.square(b_az_g - g_az_g) + np.square(b_inc_g - g_inc_g)
 ball_n = ball_t - tobii_T
 gaze_point_local  = tobii_reader.local2GlobalGaze(gaze_point, tobii_T, tobii_R, translation=True) - tobii_T
 
-_, b_az_l, b_inc_l = cartesianToPolar(ball_n, swap=False)
-_, g_az_l, g_inc_l = cartesianToPolar(gaze_point_local, swap=False)
+_, b_az_l, b_inc_l = cartesianToSpher(ball_n, swap=False)
+_, g_az_l, g_inc_l = cartesianToSpher(gaze_point_local, swap=False)
 
 dist_angle = np.sqrt(np.square(b_az_l - g_az_l) + np.square(b_inc_l - g_inc_l))
 # s = 3129 # eye fixed

@@ -1,7 +1,7 @@
 import numpy as np
 from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToSpher
-from FeaturesExtractor.GazeEvent import detectALPhase1, detectALPhase2, saccadeFeatures, detectSaccade, groupingFixation
-from FeaturesExtractor.FeaturesLib import computeSegmentAngles, computeVelAcc
+from FeaturesEngineering.GazeEvent import detectALPhase1, detectALPhase2, saccadeFeatures, detectSaccade, groupingFixation
+from FeaturesEngineering.FeaturesLib import computeSegmentAngles, computeVelAcc
 import pandas as pd
 from Utils.DataReader import TobiiReader
 import matplotlib.pyplot as plt
@@ -335,8 +335,8 @@ class Classic:
 
         gaze_n = self.gaze_point
 
-        _, b_az, b_elv = cartesianToPolar(ball_n, swap=True)
-        _, g_az, g_elv = cartesianToPolar(gaze_n, swap=True)
+        _, b_az, b_elv = cartesianToSpher(ball_n, swap=True)
+        _, g_az, g_elv = cartesianToSpher(gaze_n, swap=True)
 
         az = g_az - b_az
         elv = g_elv - b_elv

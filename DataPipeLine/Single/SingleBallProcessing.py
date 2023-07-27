@@ -31,7 +31,7 @@ class SingleBallCleaning(BallProcessing):
         for s in self.subjects:
             tobii_data.append(s["segments"].filter(regex='TobiiGlass_T').values)  # tobii data are the 3 last columns
         tobii_data = np.array(tobii_data)
-        normalized_data = super().filteringUnLabData(unlabelled_data, tobii_data)
+        normalized_data = self.filteringUnLabData(unlabelled_data, tobii_data)
         smooth_ball_data = np.array([movingAverage(normalized_data[:, i], n=1) for i in range(3)]).transpose()
         smooth_r1_data = np.array(
             [movingAverage(self.racket_1["segments"].filter(regex='pt_T').values[:, i], n=1) for i in
@@ -188,7 +188,7 @@ class SingleBallCleaning(BallProcessing):
         # delete idx
         # valleys_rackets = np.delete(valleys_rackets, np.argwhere((valleys_rackets == 11905)|(valleys_rackets == 15467)|(valleys_rackets == 16840)|(valleys_rackets == 18402)|(valleys_rackets == 19726)))
         # valleys_table = np.delete(valleys_table, np.argwhere((valleys_table == 2258 )| (valleys_table == 3369)))
-        valleys_table = np.delete(valleys_table, np.argwhere((valleys_table == 14407) | (valleys_table == 20641)))
+        # valleys_table = np.delete(valleys_table, np.argwhere((valleys_table == 14407) | (valleys_table == 20641)))
         # valleys_rackets = np.delete(valleys_rackets, np.argwhere((valleys_rackets == 6877)))
         success_ep, failure_ep = groupEpisodes(valleys_rackets, valleys_wall, valleys_table,
                                                th=params.TH_SUCCESS_EPISODES,
@@ -219,3 +219,31 @@ class SingleBallCleaning(BallProcessing):
             plt.show()
 
         return success_ep, failure_ep, valleys_rackets, valleys_wall, valleys_table
+
+    def constructFailureEpisodes(self, success, failures, wall, table):
+        success_end = success[:, 1]
+        success_start = success[:, 0]
+        failures_episodes = []
+        for f in failures:
+            fs = success_start[success_end == f]
+            if len(fs) > 0:
+                wall_i = wall[(wall > fs[0]) & (wall < f)]
+                table_i = table[(table > fs[0]) & (table < f)]
+                failures_episodes.append([fs[0], f, wall_i[0], table_i[-1]])
+
+        return np.asarray(failures_episodes, dtype=int)
+
+    def contructValleyWallTable(self, success, wall, table):
+        wall_idx = []
+        table_idx = []
+
+        for s in success:
+            wall_i = wall[(wall > s[0]) & (wall < s[1])]
+            table_i = table[(table > s[0]) & (table < s[1])]
+
+            if len(table_i) == 2:
+                table_i = table_i[-1:]
+            wall_idx.append(wall_i)
+            table_idx.append(table_i)
+
+        return np.concatenate([success, wall_idx, table_idx], axis=1).astype(int)

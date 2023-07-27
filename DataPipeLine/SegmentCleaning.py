@@ -113,16 +113,16 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        # if file_name == "2023-01-16_A_T03":
-        file_session_path = file_path + folder_name + "\\"
-        result_session_path = result_path + folder_name + "\\"
+        if file_name == "2022-12-01_A_T06":
+            file_session_path = file_path + folder_name + "\\"
+            result_session_path = result_path + folder_name + "\\"
 
-        checkMakeDir(result_session_path)
-        reader = ViconReader()
-        obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
-        cleaner = SegmentsCleaner()
+            checkMakeDir(result_session_path)
+            reader = ViconReader()
+            obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
+            cleaner = SegmentsCleaner()
 
-        try:
+            # try:
             for s in sub:
                 # tobii cleaning
                 tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
@@ -157,5 +157,5 @@ if __name__ == '__main__':
             with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
                 pickle.dump(data, f)
 
-        except:
-            print("Error: " + file_name)
+        # except:
+        #     print("Error: " + file_name)

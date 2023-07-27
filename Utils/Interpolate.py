@@ -90,10 +90,10 @@ def combineEpisode(ori: np.array, ep1: np.array, ep2: np.array, base:float, type
     '''
     if type==1:
         idx_ep1 = np.argwhere(ep1[:, 1] <= base)[-1][0] + 1
-        idx_ep2 =  np.argwhere(ep2[:, 1] <= base)[0][0]
+        # idx_ep2 =  np.argwhere(ep2[:, 1] <= base)[0][0]
     else:
         idx_ep1 = np.argwhere(ep1[:, 2] >= base)[-1][0] + 1
-        idx_ep2 = np.argwhere(ep2[:, 2] >= base)[0][0]
+        # idx_ep2 = np.argwhere(ep2[:, 2] >= base)[0][0]
 
     merger_ele = np.empty((len(ori), 3))
     merger_ele[:] = np.nan
@@ -170,7 +170,8 @@ def extrapolateAutoReg(data, idx_first_table=0, idx_ep=1):
             #forward extrapolation
             if idx > start:
                 end_idx = len(points_f) + (idx - end)
-                x[idx] = model_f_fit.predict(start=end_idx - len(idx_nan), end=end_idx, dynamic=True)[-1]
+                start_idx = end_idx - len(idx_nan) if end_idx - len(idx_nan) >= 0 else 0
+                x[idx] = model_f_fit.predict(start=start_idx, end=end_idx, dynamic=True)[-1]
             #backward extrapolation
             else:
                 if (idx_ep == 1)|(idx_ep == 4) :
@@ -351,4 +352,4 @@ if __name__ == '__main__':
 
 
 
-    plt.show()
+    # plt.show()

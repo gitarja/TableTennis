@@ -1,4 +1,4 @@
-from FeaturesExtractor.ClassicFeatures import Classic
+from FeaturesEngineering.ClassicFeatures import Classic
 from Utils.DataReader import SubjectObjectReader
 from Utils.Visualization import Visualization
 import numpy as np

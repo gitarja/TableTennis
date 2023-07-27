@@ -79,8 +79,8 @@ class TobiiCleaner:
         dist_mat = np.abs(np.expand_dims(start, axis=0) - np.expand_dims(tobii_time, 1))
         closest_points = np.nanmin(dist_mat, axis=-1)
         closest_idx = np.nanargmin(dist_mat, axis=-1)
-        selected_idx = np.argwhere((closest_points <= 15) & (valid))[:, 0]
-        tobii_df.iloc[10 + closest_idx[selected_idx]] = cut_data.iloc[selected_idx][
+        selected_idx = np.argwhere((closest_points <= 10) & (valid))[:, 0]
+        tobii_df.iloc[10+closest_idx[selected_idx]] = cut_data.iloc[selected_idx][
             selected_columns]
         for i in range(1, len(tobii_df)):
             tobii_df.loc[i, 'Eye_movement_type'] = eventToNumeric(tobii_df.loc[i - 1, 'Eye_movement_type'],
@@ -100,7 +100,11 @@ if __name__ == '__main__':
     result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\"
     ref_df = pd.read_csv(ref_file)
     single_df = ref_df.loc[ref_df.Trial_Type == "S"]
-    for i, d in single_df.iterrows():
+
+    double_df = ref_df.loc[ref_df.Trial_Type == "P"]
+    double_df_unique = double_df.loc[double_df.Session_Code.drop_duplicates().index]
+
+    for i, d in double_df_unique.iterrows():
         dates = d["Date"].replace(".", "-")
         session = d["Session"]
         trial = d["Trial"]
@@ -108,7 +112,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if "2022-11-08_A_T01" in file_name:
+        if "2022-11-24_M_T04" in file_name:
 
             try:
                 reader = SubjectObjectReader()
@@ -119,20 +123,23 @@ if __name__ == '__main__':
                 for s in sub:
                     reader = TobiiCleaner(ref_file)
                     tobii_filename = file_name.split("_")[-1] + "_" + s["name"] + ".tsv"
+                    # print(result_path + folder_name + "\\Tobii\\*" + tobii_filename + "")
                     tobii_files = glob.glob(result_path + folder_name + "\\Tobii\\*" + tobii_filename + "")
                     participant, tobii_df, percentage_fill = reader.matchData(tobii_files[0])
                     tobii_results.append({"name": participant, "trajectories": tobii_df})
 
+                    # check ball bounce
+                    import random
+
+                    success_idx = ball[0]["success_idx"]
+                    for se in success_idx[20:]:
+                        if (tobii_df.loc[se[2]]["Timestamp"] != 0):
+                            break
+                    print("%s, %s, %f,  %f, %f" % (file_name, participant, percentage_fill, tobii_df.loc[se[2]]["Timestamp"], se[2]))
+
                 data = [obj, sub, ball, tobii_results]
 
-                # check ball bounce
-                import random
 
-                success_idx = ball[0]["success_idx"]
-                for se in success_idx:
-                    if (tobii_df.loc[se[2]]["Timestamp"] != 0):
-                        break
-                print("%s, %f,  %f" % (file_name, percentage_fill, tobii_df.loc[se[2]]["Timestamp"]))
 
                 with open(
                         result_path + folder_name + "\\" + file_name + "_complete.pkl",
@@ -140,4 +147,4 @@ if __name__ == '__main__':
                     pickle.dump(data, f)
             except:
 
-                print("Error: " + file_name)
+                print("Error: " + file_name + ", ")

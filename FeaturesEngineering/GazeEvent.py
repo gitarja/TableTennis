@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from scipy import signal
 from Utils.Lib import movingAverage
 from scipy.ndimage import label
-from FeaturesExtractor.FeaturesLib import computeVectorsDirection, computeVelAccV2, computeSegmentAngles
+from FeaturesEngineering.FeaturesLib import computeVectorsDirection, computeVelAccV2, computeSegmentAngles
 
 
 def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.array):
