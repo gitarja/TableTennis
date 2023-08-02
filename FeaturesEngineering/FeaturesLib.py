@@ -2,21 +2,27 @@ import numpy as np
 from scipy.signal import lfilter, convolve
 
 def computeVelAccV2(v: np.array, normalize=True)-> np.array:
+    '''
+    :param v: vector
+    :param normalize: whether to use normalized velocity to compute acceleration or not. Normalization is performed by applying Duchowski's filter (https://doi.org/10.3758/BF03195486)
+    :return:
+    - velocity
+    - velocity norm
+    - acceleration
+    '''
     v1 = v[1:]
     v2 = v[:-1]
-    kernel_vel = np.array([0, 1, 2, 3, 2, 1, 0]) #memory and prediction in natural gaze
-    velocity = computeSegmentAngles(v1, v2) * 100
+    kernel_vel = np.array([0, 1, 2, 3, 2, 1, 0]) # Duchowski's filter (https://doi.org/10.3758/BF03195486)
+    velocity = computeSegmentAngles(v1, v2) * 100 # convert to deg / sec
     velocity = np.pad(velocity, (0, 1), 'symmetric')
     velocity_norm = lfilter(kernel_vel, 10, velocity)
-    # velocity_norm = convolve(velocity, kernel_vel/10 , "same")
     if normalize:
         acceler = np.diff(velocity_norm, n=1, axis=0)
     else:
         acceler = np.diff(velocity, n=1, axis=0)
     acceler = np.pad(acceler, (0, 1), 'symmetric')
 
-    import matplotlib.pyplot as plt
-
+    # import matplotlib.pyplot as plt
     # print(len(v))
     # print(len(velocity_norm))
     # print(len(acceler))

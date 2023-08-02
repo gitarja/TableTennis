@@ -8,6 +8,17 @@ from FeaturesEngineering.FeaturesLib import computeVectorsDirection, computeVelA
 
 
 def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.array):
+    '''
+    :param gaze: gaze in the world
+    :param ball: ball in head vector
+    :param tobii: tobii in the world
+    :param tobii_avg: tobii with windowed average
+    :return:
+    - onset and offset saccade
+    - onset and offset smooth pursuit
+    - onset and offset fixation
+    - stream label of gaze event (1: fixation, 2: smooth pursuit, 3: saccade)
+    '''
     def contstructStreamLabel(fixation, sop, saccade):
         # 1 fixation
         # 2 smooth pursuit
@@ -28,6 +39,7 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     vel_gaze, vel_norm_gaze, acc_gaze = computeVelAccV2(gaze - tobii_avg, normalize=True)
     vel_gaze_h, vel_norm_gaze_h, acc_gaze_h = computeVelAccV2(gaze - tobii,  normalize=False)
     vel_ball, vel_norm_ball, acc_ball = computeVelAccV2(ball - tobii, normalize=False)
+    vel_head, vel_norm_head, acc_head =  computeVelAccV2(tobii, normalize=True)
 
     N_label = len(gaze)
     # detect saccade
@@ -61,7 +73,7 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     # plt.subplot(2, 1, 1)
     # plt.plot(vel_norm_gaze)
     # plt.subplot(2, 1, 2)
-    # plt.plot(acc_gaze)
+    # plt.plot(acc_head)
     #
     # plt.show()
     return onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label
@@ -69,46 +81,75 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
 
 
 
+def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_length:int = 10, phase_start=0, phase_end=100):
+    '''
+    Onset               =on
+    Offet               =off
+    Duration            =dn
+    Mean distance angle =mda
+    Mean difference	    =md
+    Median difference	=mdd
+    Mean magnitude	    =mm
+    Sum magnitude	    =sm
+    Global magnitude	=gm
 
+    :param onset_offset:
+    :param gaze:
+    :param ball:
+    :return:
+    '''
 
+    dist_angle = computeSegmentAngles(ball, gaze)
 
-
-
-def saccadeFeatures(eye_event: np.array, gaze: np.array, ball: np.array):
-    dist_angle = np.sqrt(np.sum(np.square(gaze - ball), -1))
-    onset_offset = detectOnsetOffset(eye_event == 1)
-    dirs = computeVectorsDirection(gaze, ball)
-
-    saccades = []
+    features = []
     if len(onset_offset) > 0:
         for on, off in onset_offset:
             # print(on)
             # extract saccade features
-            if (np.abs(on) > 10000) & (np.abs(on) > 10000):
-                print("Test")
 
             if ((off - on) > 0):
-                saccade_mag = (np.sqrt(np.nansum(np.square(gaze[off] - gaze[on]))) / ((off - on) + 1e-15)) * 100
-                saccade_vel = np.linalg.norm(np.diff(gaze[on - 1:on + 1], axis=0)) * 100
-                saccade_ang = np.nanmean(dist_angle[on:off])
+                gaze_saccade = gaze[on:off+1]
+                # compute magnitude
+                vel_gaze, vel_norm_gaze, acc_gaze = computeVelAccV2(gaze_saccade, normalize=False)
+                sm = np.sum(vel_gaze[:-1])
+                mm = np.average(vel_gaze)
+
+                gm = computeSegmentAngles(np.expand_dims(gaze[on], 0), np.expand_dims(gaze[off], 0))[0] * 100
+
+                mda = np.nanmean(dist_angle[on:off])
 
                 # compute med-diff and mean-diff
-                med_diff = []
-                mean_diff = []
-                win_length = 10  # 1 = 10 ms
-                for j in [on, off]:
-                    bef_idx = (j - win_length) if (j - win_length) >= 0 else 0
-                    before_sample = gaze[bef_idx:j]  # 10 = 100 ms
-                    after_sample = gaze[j + 1:j + win_length]
-                    if (len(before_sample) > 0) & (len(after_sample) > 0):
-                        med_diff.append(
-                            np.linalg.norm(np.nanmedian(before_sample, axis=0) - np.nanmedian(after_sample, axis=0)))
-                        mean_diff.append(
-                            np.linalg.norm(np.nanmean(before_sample, axis=0) - np.nanmean(after_sample, axis=0)))
-                saccades.append([on * 10, off * 10, (off - on) * 10, saccade_vel, saccade_ang, np.average(med_diff),
-                                 np.average(mean_diff)])
 
-    return np.asarray(saccades)
+                ball_after_offset = ball[off:off+win_length]
+                after_ofset_angle = computeSegmentAngles(np.ones_like(ball_after_offset) * gaze[off], ball_after_offset)
+
+
+                # concatenate saccades features
+                # on = (on - phase_start) * 10
+                # off = (off - phase_start) * 10
+
+                on_event = (on - phase_start) * 10
+                off_event = (phase_end - off) * 10
+                try:
+                    features.append([
+                                     on_event,
+                                     off_event,
+                                     (off - on) * 10,
+                                     mda,
+                                     np.nanmean(after_ofset_angle),
+                                     np.nanmin(after_ofset_angle),
+                                     np.nanmax(after_ofset_angle),
+                                     mm,
+                                     sm,
+                                     gm
+                                     ])
+                except:
+                    print("error")
+
+    # remove nan features
+    features = np.asarray(features)
+    features_clean = features[np.sum(np.isnan((features)), -1) == 0]
+    return features_clean
 
 
 def detectOnsetOffset(v, type="saccade"):

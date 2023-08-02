@@ -7,6 +7,8 @@ from Utils.DataReader import TobiiReader
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 
+from FeaturesEngineering.Plotting import gazeEventsPlotting
+
 class Classic:
 
     def __init__(self, sub, racket, ball, tobii, table, wall):
@@ -153,7 +155,7 @@ class Classic:
         }
         return features_summary
 
-    def saccadePursuit(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True):
+    def detectGazeEvents(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True):
         '''
         Detect the onset and offset of saccade and pursuit in 3 phases
         :param th_al_p1:  degree/frame (saccade offset - ball trajectory) of AL in phase 1
@@ -168,21 +170,17 @@ class Classic:
         '''
 
         # saccades features
-        saccades_phase1_list = np.zeros((len(episode), 9, 7))
-        saccades_phase2_list = np.zeros((len(episode), 9, 7))
-        saccades_phase3_list = np.zeros((len(episode), 9, 7))
+        saccades_phase1_list = np.zeros((len(episode), 12, 10))
+        saccades_phase2_list = np.zeros((len(episode), 12, 10))
+        saccades_phase3_list = np.zeros((len(episode), 12, 10))
 
         ball_n = self.ball_t
 
         gaze_n = self.tobii_reader.local2GlobalGaze(self.gaze_point, self.tobii_segment_T, self.tobii_segment_R,
                                                   translation=True)
 
-
-
-        p1_features_list = []
-        p2_features_list = []
-        p3_features_list = []
         i=0
+
         for se in episode :
             # phase 1
             p1_s = se[0]
@@ -204,119 +202,60 @@ class Classic:
             tobii_avg = np.array([movingAverage(self.tobii_segment_T[p1_s:p3_e, i], n=2) for i in range(3)]).transpose()
             onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label = detectSaccade(gaze, ball, tobii, tobii_avg)
 
-            import matplotlib.pyplot as plt
+            # normalize gaze and ball
+            gaze_ih = gaze - tobii_avg
+            ball_ih = ball - tobii_avg
+            win_length = 10
+            p1s, p1e = p1_s - p1_s, p1_e - p1_s
+            p2s, p2e = p2_s - p1_s, p2_e - p1_s
+            p3s, p3e = p3_s - p1_s, p3_e - p1_s
 
-            _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze - tobii_avg, swap=False)
-            _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
-            gaze_plot = np.vstack([gaze_az, gaze_elv]).transpose()
-            ball_plot = np.vstack([ball_az, ball_elv]).transpose()
-            x = gaze_plot[:, 0]
-            y = gaze_plot[:, 1]
-            x_ball = ball_plot[:, 0]
-            y_ball = ball_plot[:, 1]
+            if len(onset_offset_saccade) > 0:
+                saccade_p1 = onset_offset_saccade[onset_offset_saccade[:, 0] <=p1e]
+                saccade_p2 = onset_offset_saccade[(onset_offset_saccade[:, 0] > p2s)&(onset_offset_saccade[:, 0] <= p2e)]
+                saccade_p3 = onset_offset_saccade[(onset_offset_saccade[:, 0] > p3s)]
 
+                print(self.tobii_time[p1_s - 1])
+                print(self.tobii_time[p1_s])
+                print(self.tobii_time[p1_s + 1])
 
-            print(self.tobii_time[p1_s])
+                saccades_phase1 = []
+                saccades_phase2 = []
+                saccades_phase3 = []
 
+                gazeEventsPlotting(gaze, tobii_avg, ball,  onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label)
+                if len(saccade_p1) > 0:
+                    saccades_phase1 = saccadeFeatures(saccade_p1, gaze_ih, ball_ih, win_length=5, phase_start=p1s, phase_end=p1e)
 
-            plt.plot(x, y, "-o")
+                if len(saccade_p2) > 0:
+                    saccades_phase2 = saccadeFeatures(saccade_p2, gaze_ih, ball_ih,
+                                                      win_length=10, phase_start=p2s, phase_end=p2e)
+                if len(saccade_p3) > 0:
 
-            plt.quiver(x[:-1], y[:-1], x[1:] - x[:-1], y[1:] - y[:-1], scale_units='xy', angles='xy', scale=2, width = 0.002)
+                    if saccade_p3[-1, 1] > len(gaze):
+                        saccade_p3[-1, 1] = len(gaze) - 1
+                    win_length = len(ball) - saccade_p3[-1, 1]
+                    saccades_phase3 = saccadeFeatures(saccade_p3, gaze_ih, ball_ih,
+                                                      win_length=win_length, phase_start=p3s, phase_end=p3e)
 
-            # plt.plot(x_ball, y_ball, "-*")
-            # plt.quiver(x_ball[:-1], y_ball[:-1], x_ball[1:] - x_ball[:-1], y_ball[1:] - y_ball[:-1], scale_units='xy',
-            #            angles='xy', scale=2,
-            #            width=0.002)
+                if len(saccades_phase1) > 0:
+                    saccades_phase1_list[i, :len(saccades_phase1)] = saccades_phase1
+                if len(saccades_phase2) > 0:
+                    saccades_phase2_list[i, :len(saccades_phase2)] = saccades_phase2
+                if len(saccades_phase3) > 0:
+                    saccades_phase3_list[i, :len(saccades_phase3)] = saccades_phase3
 
-
-            for on, off in onset_offset_sp:
-                plt.scatter(x[on:off +1], y[on:off + 1],  color="blue", zorder=2)
-
-            for on, off in onset_offset_fix:
-                plt.scatter(x[on:off + 1], y[on:off + 1],  color="black", zorder=3)
-
-            for on, off in onset_offset_saccade:
-                plt.scatter(x[on:off + 1], y[on:off + 1], color="red", zorder=4)
-
-
-            plt.show()
-
-            fig = plt.figure()
-            ax = fig.add_subplot(projection='3d')
-            color_labels = ["black", "blue", "red"]
-            ax.scatter(ball[:, 0], ball[:, 1], ball[:, 2], alpha=0.01, depthshade=False)
-            # ax.scatter(gaze[:, 0], gaze[:, 1], gaze[:, 2])
-
-            for i in range(3):
-                idx = np.argwhere(stream_label == (i+1))
-                ax.scatter(ball[idx, 0], ball[idx, 1], ball[idx, 2], color=color_labels[i], zorder=4,
-                           alpha=1, depthshade=False)
+            i+=1
 
 
 
+        features_summary = {
+                "saccade_p1": saccades_phase1_list,
+                "saccade_p2": saccades_phase2_list,
+                "saccade_p3": saccades_phase3_list,
+        }
 
-
-            plt.show()
-
-            # saccades_phase1 = saccadeFeatures(self.eye_event[p1_s:p1_e], gaze_an[p1_s:p1_e], ball_an[p1_s:p1_e])
-            # saccades_phase2 = saccadeFeatures(self.eye_event[p2_s:p2_e+3], gaze_an[p2_s:p2_e+3], ball_an[p2_s:p2_e+3])
-            # saccades_phase3 = saccadeFeatures(self.eye_event[p3_s:p3_e], gaze_an[p3_s:p3_e], ball_an[p3_s:p3_e])
-            #
-            # if len(saccades_phase1) > 0:
-            #     try:
-            #         saccades_phase1_list[i, :len(saccades_phase1)] = saccades_phase1
-            #     except:
-            #         print("eeror")
-            # if len(saccades_phase2) > 0:
-            #     saccades_phase2_list[i, :len(saccades_phase2)] = saccades_phase2
-            # if len(saccades_phase3) > 0:
-            #     saccades_phase3_list[i, :len(saccades_phase3)] = saccades_phase3
-            # saccades_phase1_list.append(saccades_phase1)
-            # saccades_phase2_list.append(saccades_phase2)
-            # saccades_phase3_list.append(saccades_phase3)
-
-        #     phase1_features = detectALPhase1(self.eye_event[p1_s:p1_e], az[p1_s:p1_e], elv[p1_s:p1_e], th=th_al_p1)
-        #     phase2_features, phase3_features = detectALPhase2(self.eye_event[p2_s:p2_e], self.eye_event[p3_s:p3_e],
-        #                                                           gaze_an[p2_s:p3_e], ball_an[p2_s:p3_e], th=th_al_p2,
-        #                                                           th_angle_p=th_angle_p)
-        #
-        #
-        #     p1_features_list.append(phase1_features)
-        #     p2_features_list.append(phase2_features)
-        #     p3_features_list.append(phase3_features)
-        #     i+=1
-        #
-        # p1_features_list = np.vstack(p1_features_list)
-        # p2_features_list = np.vstack(p2_features_list)
-        # p3_features_list = np.vstack(p3_features_list)
-        #
-        # if normalize:
-        #     features_summary = {
-        #         "al_p1_percentage": np.average(p1_features_list[:, 0] != 1e+4),
-        #         "al_p2_percentage": np.average(p2_features_list[:, 0] != 1e+4),
-        #         "pr_p2_percentage": np.average(p3_features_list[:, 0] != 1e+4),
-        #         "p1_features": p1_features_list[p1_features_list[:, 0] != 1e+4],
-        #         "p2_features": p2_features_list[p2_features_list[:, 0] != 1e+4],
-        #         "p3_features": p3_features_list[p3_features_list[:, 0] != 1e+4],
-        #         "saccade_p1": saccades_phase1_list,
-        #         "saccade_p2": saccades_phase2_list,
-        #         "saccade_p3": saccades_phase3_list,
-        #
-        #     }
-        # else:
-        #     features_summary = {
-        #         "al_p1_percentage": np.average(p1_features_list[:, 0] != 1e+4),
-        #         "al_p2_percentage": np.average(p2_features_list[:, 0] != 1e+4),
-        #         "pr_p2_percentage": np.average(p3_features_list[:, 0] != 1e+4),
-        #         "p1_features": p1_features_list,
-        #         "p2_features": p2_features_list,
-        #         "p3_features": p3_features_list,
-        #         "saccade_p1": saccades_phase1_list,
-        #         "saccade_p2": saccades_phase2_list,
-        #         "saccade_p3": saccades_phase3_list,
-        #     }
-        #
-        # return features_summary
+        return features_summary
 
 
 
@@ -548,10 +487,10 @@ class Classic:
 
 
     def extractSaccadePursuit(self, normalize=True):
-        success_rt = self.saccadePursuit(self.success_idx, normalize=normalize, th_angle_p=25)
+        success_rt = self.detectGazeEvents(self.success_idx, normalize=normalize, th_angle_p=25)
         failures_rt = []
         if len(self.failures_idx)> 0:
-            failures_rt = self.saccadePursuit(self.failures_idx, normalize=normalize, th_angle_p=25)
+            failures_rt = self.detectGazeEvents(self.failures_idx, normalize=normalize, th_angle_p=25)
 
         return success_rt, failures_rt
 

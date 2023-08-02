@@ -4,13 +4,13 @@ import sys
 
 import pandas as pd
 
-from Visualization.MainViewer import Ui_MainWindow
+from Visualization.View.MainViewer import Ui_MainWindow
 from PyQt5.QtWidgets import QApplication
 from PyQt5 import QtWidgets
 import numpy as np
 from PyQt5 import QtCore, QtGui
 from Utils.DataReader import ViconReader, TobiiReader, ECGReader, BallReader, SubjectObjectReader
-from Visualization.UtilsViewer import showErrorMessage
+from Visualization.View.UtilsViewer import showErrorMessage
 import time
 import glob
 from pathlib import Path
