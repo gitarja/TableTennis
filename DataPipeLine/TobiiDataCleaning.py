@@ -112,7 +112,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if "2022-11-24_M_T04" in file_name:
+        if "2022-12-21_M_T05" in file_name:
 
             try:
                 reader = SubjectObjectReader()

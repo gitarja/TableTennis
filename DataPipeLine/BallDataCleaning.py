@@ -21,7 +21,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if file_name == "2022-12-01_A_T06":
+        if file_name == "2022-11-29_A_T01":
         # try:
             file_session_path = file_path + folder_name + "\\"
             result_session_path = result_path + folder_name + "\\"
@@ -36,9 +36,9 @@ if __name__ == '__main__':
             df = pd.DataFrame(data, columns=["ball_x", "ball_y", "ball_z"])
             data = [obj, sub, [{"name": "ball", "trajectories": df, "success_idx": success, "failures_idx": failures}]]
 
-            with open(result_session_path + file_name + "_wb.pkl",
-                      'wb') as f:
-                pickle.dump(data, f)
+            # with open(result_session_path + file_name + "_wb.pkl",
+            #           'wb') as f:
+            #     pickle.dump(data, f)
 
         # except:
         #     print("Error: " + file_name)

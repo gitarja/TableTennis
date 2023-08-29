@@ -13,7 +13,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from Config.Episodes import EpisodesParamsSingle, EpisodesParamsDouble
 import pickle
-from PreProcessing.BallProcessing import BallProcessing
+from DataPipeLine.BallProcessing import BallProcessing
 
 
 class DoulbeBallProcessing(BallProcessing):
@@ -246,17 +246,17 @@ class DoulbeBallProcessing(BallProcessing):
 
         # valleys_rackets1 = np.delete(valleys_rackets1,
         #                              np.argwhere((valleys_rackets1 >= 3000) & (valleys_rackets1 <= 3070)))
-        valleys_rackets1 = np.delete(valleys_rackets1,
-                                     np.argwhere((valleys_rackets1 >= 26900) & (valleys_rackets1 <= 27100)))
-        valleys_rackets1 = np.delete(valleys_rackets1,
-                                     np.argwhere((valleys_rackets1 >= 27700) & (valleys_rackets1 <= 27800)))
+        # valleys_rackets1 = np.delete(valleys_rackets1,
+        #                              np.argwhere((valleys_rackets1 >= 26900) & (valleys_rackets1 <= 27100)))
+        # valleys_rackets1 = np.delete(valleys_rackets1,
+        #                              np.argwhere((valleys_rackets1 >= 27700) & (valleys_rackets1 <= 27800)))
 
 
         valleys_rackets1 = groupValleys(valleys_rackets1, dist_rackets1, within_th=params.TH_WITHIN_RACKET)
 
         # get valleys racket 2
         valleys_rackets2 = findValleys(dist_rackets2, th_c=params.TH_CONFIDENCE, th_d=params.TH_D_RACKET)
-        valleys_rackets2 = np.delete(valleys_rackets2, np.argwhere((valleys_rackets2 >= 8000) & (valleys_rackets2 <= 8250)))
+        # valleys_rackets2 = np.delete(valleys_rackets2, np.argwhere((valleys_rackets2 >= 8000) & (valleys_rackets2 <= 8250)))
         # valleys_rackets2 = np.delete(valleys_rackets2,
         #                              np.argwhere((valleys_rackets2 >= 27400) & (valleys_rackets2 <= 27480)))
 
@@ -291,15 +291,15 @@ class DoulbeBallProcessing(BallProcessing):
         valleys_table = findValleys(dist_table, th_c=params.TH_CONFIDENCE, th_d=params.TH_D_TABLE)
         # some people hit the ball when it is near the table, remove the valley before impact
 
+
+        # valleys_table = np.delete(valleys_table,
+        #                              np.argwhere((valleys_table >= 3100) & (valleys_table <= 3140)))
         #
         # valleys_table = np.delete(valleys_table,
-        #                              np.argwhere((valleys_table >= 24800) & (valleys_table <= 32000)))
+        #                                  np.argwhere((valleys_table >= 16940) & (valleys_table <= 16970)))
         #
         # valleys_table = np.delete(valleys_table,
-        #                                  np.argwhere((valleys_table >= 16260) & (valleys_table <= 16290)))
-        #
-        # valleys_table = np.delete(valleys_table,
-        #                           np.argwhere((valleys_table >= 6180) & (valleys_table <= 6210)))
+        #                           np.argwhere((valleys_table >= 38020) & (valleys_table <= 38040)))
         # if show==False:
         #     valleys_table = np.delete(valleys_table,
         #                                  np.argwhere((valleys_table >= 23925) & (valleys_table <= 23940)))

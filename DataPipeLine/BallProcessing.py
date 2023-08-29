@@ -360,10 +360,10 @@ class BallProcessing:
         data = data[:len(tobii_data), :, :]
 
         tobii_dist_1 = np.linalg.norm(data - np.expand_dims(tobii_data[:, 0, :], 1), axis=-1)
-        tobii_m = (tobii_dist_1 < 200)
+        tobii_m = (tobii_dist_1 < 300)
         if tobii_data.shape[1] >= 2:
             tobii_dist_2 = np.linalg.norm(data - np.expand_dims(tobii_data[:, 1, :], 1), axis=-1)
-            tobii_m = (tobii_dist_1 < 200) | (tobii_dist_2 < 200)
+            tobii_m = (tobii_dist_1 < 300) | (tobii_dist_2 < 300)
 
         data[tobii_m] = np.nan
         # remove all Tobii ghost data

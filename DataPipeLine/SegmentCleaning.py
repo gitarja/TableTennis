@@ -113,7 +113,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if file_name == "2022-12-01_A_T06":
+        if file_name == "2022-12-21_M_T05":
             file_session_path = file_path + folder_name + "\\"
             result_session_path = result_path + folder_name + "\\"
 

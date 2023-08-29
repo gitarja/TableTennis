@@ -38,8 +38,6 @@ def cartesianToSpher(vector, swap=False):
 
     az = fit180(az)
 
-
-
     return r, az , elv
 
 def butterLowPass(lowcut, fs, order=5):

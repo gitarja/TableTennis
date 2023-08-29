@@ -24,23 +24,24 @@ for i, d in double_df_unique.iterrows():
     file_session_path = file_path + folder_name + "\\"
     result_session_path = result_path + folder_name + "\\"
 
-    # if file_name == "2023-03-15_A_T01":
-    reader = SubjectObjectReader()
-    obj, sub, ball = reader.extractData(
-        result_path + folder_name + "\\" + file_name + "_wb.pkl")
-    trajectory = ball[0]["trajectories"]
-    success_episode = ball[0]["success_idx"]
-    failures_episode = ball[0]["failures_idx"]
+    if file_name == "2022-11-29_A_T01":
+        reader = SubjectObjectReader()
+        obj, sub, ball = reader.extractData(
+            result_path + folder_name + "\\" + file_name + "_wb.pkl")
+        trajectory = ball[0]["trajectories"]
+        success_episode = ball[0]["success_idx"]
+        failures_episode = ball[0]["failures_idx"]
 
-    start = np.random.randint(0, len(trajectory))
-    stop = start + 2000
+        # start = np.random.randint(0, len(trajectory))
+        start = 26081
+        stop = start + 2000
 
-    num_success = np.sum((success_episode[:, 0] >= start) & (success_episode[:, 0] <= stop))
-    if (len(failures_episode)) > 0:
-        num_failure = np.sum((failures_episode[:, 0] >= start) & (failures_episode[:, 0] <= stop))
-    else:
-        num_failure = 0
-    file_info = file_name.split("_")
+        num_success = np.sum((success_episode[:, 0] >= start) & (success_episode[:, 0] <= stop))
+        if (len(failures_episode)) > 0:
+            num_failure = np.sum((failures_episode[:, 0] >= start) & (failures_episode[:, 0] <= stop))
+        else:
+            num_failure = 0
+        file_info = file_name.split("_")
 
-    print("%s, %s, %s, %d, %d, %f, %f" % (
-    file_info[0], file_info[1], file_info[2], start, stop, num_success, num_failure))
+        print("%s, %s, %s, %d, %d, %f, %f" % (
+        file_info[0], file_info[1], file_info[2], start, stop, num_success, num_failure))

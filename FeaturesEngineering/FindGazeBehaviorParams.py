@@ -65,7 +65,7 @@ saccade_phase3_s = []
 saccade_phase1_f = []
 saccade_phase2_f = []
 saccade_phase3_f = []
-for i, d in double_df_unique.iterrows():
+for i, d in single_df.iterrows():
     dates = d["Date"].replace(".", "-")
     session = d["Session"]
     trial = d["Trial"]
@@ -74,54 +74,56 @@ for i, d in double_df_unique.iterrows():
 
 
     print(file_name)
-    # if file_name == "2022-11-08_A_T02":
 
-    obj, sub, ball, tobii = reader.extractData(
-        result_path + folder_name + "\\" + file_name + "_complete.pkl")
-    racket = None
-    table = None
-    wall = None
-    for o in obj:
-        if "racket" in o["name"].lower():
-            racket = o
-        if "table" in o["name"].lower():
-            table = o
-        if "wall" in o["name"].lower():
-            wall = o
+    # if file_name == "2023-02-07_A_T05":
+    if file_name == "2022-11-30_A_T01":
 
-    j=0
-    for s, t in zip(sub, tobii):
-        if j == 0:
-            j+=1
-            continue
-        print(s["name"])
-        features_extractor = Classic(s, racket, ball[0], t, table, wall)
+        obj, sub, ball, tobii = reader.extractData(
+            result_path + folder_name + "\\" + file_name + "_complete.pkl")
+        racket = None
+        table = None
+        wall = None
+        for o in obj:
+            if "racket" in o["name"].lower():
+                racket = o
+            if "table" in o["name"].lower():
+                table = o
+            if "wall" in o["name"].lower():
+                wall = o
 
-        s_sacc, f_sacc = features_extractor.extractSaccadePursuit(normalize=False)
+        j=0
+        for s, t in zip(sub, tobii):
+            # if j == 0:
+            #     j+=1
+            #     continue
+            print(s["name"])
+            features_extractor = Classic(s, racket, ball[0], t, table, wall)
 
-        # adding saccade of phase 1
-        saccade_phase1_s.append(s_sacc["saccade_p1"])
+            s_sacc, f_sacc = features_extractor.extractSaccadePursuit(normalize=False)
 
-        # adding saccade of phase 2
-        saccade_phase2_s.append(s_sacc["saccade_p2"])
+            # adding saccade of phase 1
+            saccade_phase1_s.append(s_sacc["saccade_p1"])
 
-        # adding saccade of phase 3
-        saccade_phase3_s.append(s_sacc["saccade_p3"])
+            # adding saccade of phase 2
+            saccade_phase2_s.append(s_sacc["saccade_p2"])
 
-        # adding saccade of failures episode
-        if len(f_sacc) > 0:
-            saccade_phase1_f.append(f_sacc["saccade_p1"])
-            saccade_phase2_f.append(f_sacc["saccade_p2"])
-            saccade_phase3_f.append(f_sacc["saccade_p3"])
+            # adding saccade of phase 3
+            saccade_phase3_s.append(s_sacc["saccade_p3"])
 
-saccade_phase1_s = np.concatenate(saccade_phase1_s, 0)
-saccade_phase2_s = np.concatenate(saccade_phase2_s, 0)
-saccade_phase3_s = np.concatenate(saccade_phase3_s, 0)
+            # adding saccade of failures episode
+            if len(f_sacc) > 0:
+                saccade_phase1_f.append(f_sacc["saccade_p1"])
+                saccade_phase2_f.append(f_sacc["saccade_p2"])
+                saccade_phase3_f.append(f_sacc["saccade_p3"])
 
-saccade_phase1_f = np.concatenate(saccade_phase1_f, 0)
-saccade_phase2_f = np.concatenate(saccade_phase2_f, 0)
-saccade_phase3_f = np.concatenate(saccade_phase3_f, 0)
-
-plotHist(saccade_phase1_s, saccade_phase1_f)
-plotHist(saccade_phase2_s, saccade_phase2_f)
-plotHist(saccade_phase3_s, saccade_phase3_f)
+# saccade_phase1_s = np.concatenate(saccade_phase1_s, 0)
+# saccade_phase2_s = np.concatenate(saccade_phase2_s, 0)
+# saccade_phase3_s = np.concatenate(saccade_phase3_s, 0)
+#
+# saccade_phase1_f = np.concatenate(saccade_phase1_f, 0)
+# saccade_phase2_f = np.concatenate(saccade_phase2_f, 0)
+# saccade_phase3_f = np.concatenate(saccade_phase3_f, 0)
+#
+# plotHist(saccade_phase1_s, saccade_phase1_f)
+# plotHist(saccade_phase2_s, saccade_phase2_f)
+# plotHist(saccade_phase3_s, saccade_phase3_f)
