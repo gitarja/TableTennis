@@ -170,9 +170,9 @@ class Classic:
         '''
 
         # saccades features
-        saccades_phase1_list = np.zeros((len(episode), 12, 10))
-        saccades_phase2_list = np.zeros((len(episode), 12, 10))
-        saccades_phase3_list = np.zeros((len(episode), 12, 10))
+        anticipation_phase1_list = np.zeros(shape=(len(episode), 10))
+        anticipation_phase2_list = np.zeros(shape=(len(episode), 10))
+        anticipation_phase3_list = np.zeros(shape=(len(episode), 10))
 
         ball_n = self.ball_t
 
@@ -216,27 +216,27 @@ class Classic:
                 saccade_p3 = onset_offset_saccade[(onset_offset_saccade[:, 0] > p3s)]
 
                 # print(p1_s)
-                print(self.tobii_time[p1_s - 1])
-                print(self.tobii_time[p1_s])
-                print(self.tobii_time[p1_s + 1])
-
-                saccades_phase1 = []
-                saccades_phase2 = []
-                saccades_phase3 = []
-
+                # print(self.tobii_time[p1_s - 1])
+                # print(self.tobii_time[p1_s])
+                # print(self.tobii_time[p1_s + 1])
+                #
                 # print(onset_offset_saccade)
 
                 al_cs_labels = []
                 # print("------------------------Phase1------------------------")
                 if len(saccade_p1) > 0:
-                    saccades_phase1, al_cs_p1 = saccadeFeatures(saccade_p1, gaze_ih, ball_ih, win_length=5, phase_start=p1s, phase_end=p1e)
+                    saccades_phase1, al_cs_p1 = saccadeFeatures(saccade_p1, gaze_ih, ball_ih, win_length=10, phase_start=p1s, phase_end=p1e)
                     al_cs_labels.append(al_cs_p1)
+                    if np.sum(al_cs_p1 == 1) == 1:
+                        anticipation_phase1_list[i] = saccades_phase1[al_cs_p1==1]
 
                 # print("------------------------Phase2------------------------")
                 if len(saccade_p2) > 0:
                     saccades_phase2, al_cs_p2 = saccadeFeatures(saccade_p2, gaze_ih, ball_ih,
-                                                      win_length=10, phase_start=p2s, phase_end=p2e)
+                                                      win_length=10, phase_start=p2s, phase_end=p2e, phase_2=True)
                     al_cs_labels.append(al_cs_p2)
+                    if np.sum(al_cs_p2 == 1) == 1:
+                        anticipation_phase2_list[i] = saccades_phase2[al_cs_p2 == 1]
 
                 # print("------------------------Phase3------------------------")
                 if len(saccade_p3) > 0:
@@ -246,27 +246,24 @@ class Classic:
                     saccades_phase3, al_cs_p3 = saccadeFeatures(saccade_p3, gaze_ih, ball_ih,
                                                       win_length=win_length, phase_start=p3s, phase_end=p3e, classify_al=False)
 
+                    if np.sum(al_cs_p3 == 1) == 1:
+                        anticipation_phase3_list[i] = saccades_phase3[al_cs_p3 == 1]
                     al_cs_labels.append(al_cs_p3)
 
-                al_cs_labels = np.concatenate(al_cs_labels)
-                gazeEventsPlotting(gaze, tobii_avg, ball, onset_offset_saccade, onset_offset_sp, onset_offset_fix,
-                                   stream_label, al_cs_labels)
-            #
-            #     if len(saccades_phase1) > 0:
-            #         saccades_phase1_list[i, :len(saccades_phase1)] = saccades_phase1
-            #     if len(saccades_phase2) > 0:
-            #         saccades_phase2_list[i, :len(saccades_phase2)] = saccades_phase2
-            #     if len(saccades_phase3) > 0:
-            #         saccades_phase3_list[i, :len(saccades_phase3)] = saccades_phase3
-            #
-            # i+=1
+
+                # if you want to plot the results
+                # al_cs_labels = np.concatenate(al_cs_labels)
+                # gazeEventsPlotting(gaze, tobii_avg, ball, onset_offset_saccade, onset_offset_sp, onset_offset_fix,
+                #                    stream_label, al_cs_labels)
+
+            i+=1
 
 
 
         features_summary = {
-                "saccade_p1": saccades_phase1_list,
-                "saccade_p2": saccades_phase2_list,
-                "saccade_p3": saccades_phase3_list,
+                "saccade_p1": anticipation_phase1_list,
+                "saccade_p2": anticipation_phase2_list,
+                "saccade_p3": anticipation_phase3_list,
         }
 
         return features_summary

@@ -180,10 +180,11 @@ def computeScore(s, f, max_time = 360., ball_trajetories=None, wall_trajectories
             return len(s), len(s)
         else:
             n_seq = []
-            for i in range(len(f) - 1):
-                start = f[i, 0]
-                stop = f[i+1, 1]
-                n_seq.append(np.sum((s[:,0] >=start) & (s[:,0] <=stop)))
+            stop_seq = np.hstack([0, f[:, 1], s[-1, 1]])
+            for i in range(len(stop_seq) - 1):
+                start = stop_seq[i]
+                stop =  stop_seq[i+1]
+                n_seq.append(np.sum((s[:,0] >=start) & (s[:,1] <=stop)))
 
             return np.max(n_seq), np.average(n_seq)
 
