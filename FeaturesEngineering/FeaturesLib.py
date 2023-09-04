@@ -206,18 +206,18 @@ def computeScore(s, f, max_time = 360., ball_trajetories=None, wall_trajectories
     duration = d_s + d_f
     avg_episode = (avg_ds + avg_df) / 2
 
+    # scores
     mix_score = (n_s - n_f) / (duration)
+    skill = n_s / avg_episode
+    task_score = duration / (n_f + 1)
+    max_seq, avg_seq = computeSequenceFeatures(s, f)
+
+    #ball
     bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy = computeBallHullSTD(s, ball_trajetories)
     rt_lypanov = computeLypanovMax(s)
     samp_en = computeSampEn(s)
     std_rt = computeRTSTD(s)
     mov_var1, mov_var2, mov_var3 = computeVarMov(s)
-    skill = n_s / avg_episode
-    task_score = duration / (n_f + 1)
-    max_seq, avg_seq = computeSequenceFeatures(s, f)
-
-
-
 
 
     return n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt,  mov_var1, mov_var2, mov_var3

@@ -82,14 +82,18 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     return onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label
 
 
-def classifyALCS(saccade_onset_offset, gaze,  gaze_view, ball_view):
+def classifyALCS(saccade_onset_offset: np.array, gaze: np.array,  gaze_view:np.array, ball_view: np.array) -> np.array:
     '''
-    :param saccade_onset_offset:
-    :param gaze:
-    :param gaze_view:
-    :param ball_view:
+    :param saccade_onset_offset:onset and offset episodes of the saccades
+    :param gaze: gaze-in-the-world
+    :param gaze_view: gaze in the visual field
+    :param ball_view: ball in the visual field
     label= (1: anticipatory look, 2: correction saccade)
-    :return:
+    :return: labels of each saccade (0: normal saccade, 1: anticipatory look, 2: correction saccade)
+
+    normal saccade: the saccade direction and ball direction differ (before anticipatory)
+    anticipatory look: the saccade moves to the same direction as the ball
+    correction saccade: the saccade occurs after anticipatory look (after anticipatory)
     '''
 
     def detectAL(g, b):
@@ -118,14 +122,14 @@ def classifyALCS(saccade_onset_offset, gaze,  gaze_view, ball_view):
 
     labels[al_idx] = 1
     labels[al_idx+1:] = 2
+
     # print(all_candidates)
     # print(all_gm)
-
     # print(labels)
 
     return labels
 
-def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_length:int = 10, phase_start=0, phase_end=100, classify_al=True, phase_2=False):
+def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_length:int = 10, phase_start=0, phase_end=100, classify_al=True, phase_2=False) -> tuple:
     '''
     Onset                       =on
     Offet                       =off
@@ -138,16 +142,24 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
     Sum magnitude               =sm
     Global magnitude            =gm
 
-    :param onset_offset:
-    :param gaze:
-    :param ball:
-    :return:
+    :param onset_offset: onset and offset episodes
+    :param gaze: gaze in the world
+    :param ball: ball in the world
+    :return: concatenate features
+
+    One should note that we use gaze and ball information in the world space and visual-field space
+    When you should use gaze-in-the-world
+    - computing velocity or acceleration
+    when you should use gaze-in-the-head (visual field)
+    - when computing angle between the ball and the gaze
     '''
 
 
 
     _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze, swap=False)
     _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
+
+    # when computing the angle between the gaze and the ball, both of them shuld be converted into visual field
     gaze_view = np.vstack([gaze_az, gaze_elv]).transpose()
     ball_view = np.vstack([ball_az, ball_elv]).transpose()
 
@@ -178,17 +190,17 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
                 after_ofset_angle = np.linalg.norm(gaze_at_offset- ball_after_offset, axis=-1)
 
 
-                # concatenate saccades features
                 on_event = (phase_end - on) * 10
                 off_event = (phase_end - off) * 10
+
                 # if phase_2:
-                #     on_event = (phase_end - on) * 10
-                #     off_event = (phase_end - off) * 10
-                # else:
                 #     on_event = (on - phase_start) * 10
                 #     off_event = (off - phase_start) * 10
+                # else:
+                #     on_event = (phase_end - on) * 10
+                #     off_event = (phase_end - off) * 10
 
-
+                # concatenate saccades features
                 try:
                     features.append([
                                      on_event,
@@ -218,7 +230,13 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
     return features_clean, al_cs
 
 
-def detectOnsetOffset(v, type="saccade"):
+def detectOnsetOffset(v: np.array, type="saccade") -> np.array:
+    '''
+    :param v: events vector
+    :param type: type of the effents
+    :return: onset and offset episodes
+    '''
+
     v = v.astype(np.int)
     output = []
     valley_groups, num_groups = label(v == 1)
@@ -242,7 +260,13 @@ def detectOnsetOffset(v, type="saccade"):
     return output
 
 
-def groupingFixation(gaze: np.array, onset_offset:np.array):
+def groupingFixation(gaze: np.array, onset_offset:np.array) -> np.array:
+    '''
+    use this function to group fixation only
+    :param gaze: gaze in the world
+    :param onset_offset: onset and offset episodes
+    :return: the groupped onset and offset episodes
+    '''
     if (len(onset_offset) > 1):
         new_onset_offset = []
 
@@ -272,7 +296,12 @@ def groupingFixation(gaze: np.array, onset_offset:np.array):
         return onset_offset
 
 
-def groupPursuit(onset_offset:np.array):
+def groupPursuit(onset_offset:np.array) -> np.array:
+    '''
+    use this function to group smooth pursuit
+    :param onset_offset: onset and offset episodes
+    :return: the groupped episodes
+    '''
     if (len(onset_offset) > 1):
         new_onset_offset = []
 
@@ -300,98 +329,100 @@ def groupPursuit(onset_offset:np.array):
         return onset_offset
 
 
-def detectALPhase1(eye_event: np.array, az: np.array, elv: np.array, th=10) -> np.array:
-    '''
-    :param eye_event: eye event of phase 1 from Tobii
-    :param gaze: azimuth (ball-gaze)
-    :param ball: elevation (ball-gaze)
-    :param th: degree/frame (saccade offset - ball trajectory)
-    :return: (angle, onset, offset)
-    '''
+# methods used previously to detect anticipatory look at phase 1 and 2
 
-    dist_angle = np.sqrt(np.square(az) + np.square(elv))
-    onset_offset = detectOnsetOffset(eye_event == 1)
-
-    al_angle = 1e+4
-    al_offset = 0
-    al_onset = 0
-
-    if len(onset_offset) > 0:
-        for on, off in onset_offset:
-            # angle between ball and gaze after saccade offset
-            min_angle = np.min(dist_angle[off:])
-            if min_angle <= th:
-                al_offset = off
-                al_onset = on
-                al_angle = min_angle
-
-    return np.array([al_angle, al_onset, al_offset])
-
-
-def detectALPhase2(eye_event2: np.array, eye_event3: np.array, gaze: np.array, ball: np.array, th: float = 25,
-                   th_angle_p=25) -> np.array:
-    '''
-    :param eye_event2: eye_event phase 2
-    :param eye_event3: eye_event phase 3
-    :param gaze: gaze in polar coordinates
-    :param ball: ball in polar coordinates
-    :param th: degree/frame (saccade offset - ball trajectory) of AL
-    :param th_angle_p: degree/frame (saccade offset - ball trajectory) of pursuit
-    :return:
-    '''
-
-    # anticipation look
-    al_angle = 1e+4
-    al_magnitude = 1e+4
-    al_offset = 0
-    al_onset = 0
-
-    # pursuit
-    p_avg_angle = 1e+4
-    p_on = 0
-    p_off = 0
-
-    onset_offset_saccade = detectOnsetOffset(eye_event2 == 1)
-
-    ps2_end = len(eye_event2)
-    ps3_start = ps2_end
-    dist_angle = np.sqrt(np.sum(np.square(gaze - ball), -1))  # use azimuth and elevation
-    # dist_angle = np.sqrt(np.square(gaze[:, 0] - ball[:, 0]))  # use azimuth only
-    # detect pursuit
-    dist_angle3 = dist_angle[ps3_start:]
-    pursuit_events_idx = detectOnsetOffset((eye_event3 == 2) & (dist_angle3 <= th_angle_p))
-
-    if (len(onset_offset_saccade) > 0) & (len(pursuit_events_idx) > 0):
-        first_pursuit = pursuit_events_idx[0]
-        last_pursuit = pursuit_events_idx[-1]
-        ball_pursuit = ball[first_pursuit[0], 0]
-        for on, off in onset_offset_saccade:
-            gaze_saccade = gaze[off, 0]
-            dist_sp = np.sqrt(np.sum(np.square(gaze_saccade - ball_pursuit)))
-            # print(dist_sp)
-            if dist_sp <= th:
-                al_angle = dist_sp
-                al_onset = on
-                al_offset = off
-                al_magnitude = np.sqrt(np.sum(np.square(gaze[off] - gaze[on]))) / ((off - on) + 1e-5)
-
-    if len(pursuit_events_idx) > 0:
-        first_pursuit = pursuit_events_idx[0]
-        last_pursuit = pursuit_events_idx[-1]
-        p_on = first_pursuit[0]
-        p_off = last_pursuit[1]
-        p_avg_angle_list = []
-        for p_on, p_off in pursuit_events_idx:
-            p_avg_angle_list.append(dist_angle3[p_on:p_off])
-
-        p_avg_angle = np.average(np.concatenate(p_avg_angle_list))
-    else:
-        if np.average((eye_event3 == 2) & (dist_angle3 <= th_angle_p)) == 1:
-            p_on = 0
-            p_off = len(dist_angle3) - 1
-            p_avg_angle = np.average(dist_angle3)
-        # else:
-        #     plt.plot(dist_angle3)
-        #     plt.show()
-
-    return np.array([al_angle, al_magnitude, al_onset, al_offset]), np.array([p_avg_angle, p_on, p_off])
+# def detectALPhase1(eye_event: np.array, az: np.array, elv: np.array, th=10) -> np.array:
+#     '''
+#     :param eye_event: eye event of phase 1 from Tobii
+#     :param gaze: azimuth (ball-gaze)
+#     :param ball: elevation (ball-gaze)
+#     :param th: degree/frame (saccade offset - ball trajectory)
+#     :return: (angle, onset, offset)
+#     '''
+#
+#     dist_angle = np.sqrt(np.square(az) + np.square(elv))
+#     onset_offset = detectOnsetOffset(eye_event == 1)
+#
+#     al_angle = 1e+4
+#     al_offset = 0
+#     al_onset = 0
+#
+#     if len(onset_offset) > 0:
+#         for on, off in onset_offset:
+#             # angle between ball and gaze after saccade offset
+#             min_angle = np.min(dist_angle[off:])
+#             if min_angle <= th:
+#                 al_offset = off
+#                 al_onset = on
+#                 al_angle = min_angle
+#
+#     return np.array([al_angle, al_onset, al_offset])
+#
+#
+# def detectALPhase2(eye_event2: np.array, eye_event3: np.array, gaze: np.array, ball: np.array, th: float = 25,
+#                    th_angle_p=25) -> np.array:
+#     '''
+#     :param eye_event2: eye_event phase 2
+#     :param eye_event3: eye_event phase 3
+#     :param gaze: gaze in polar coordinates
+#     :param ball: ball in polar coordinates
+#     :param th: degree/frame (saccade offset - ball trajectory) of AL
+#     :param th_angle_p: degree/frame (saccade offset - ball trajectory) of pursuit
+#     :return:
+#     '''
+#
+#     # anticipation look
+#     al_angle = 1e+4
+#     al_magnitude = 1e+4
+#     al_offset = 0
+#     al_onset = 0
+#
+#     # pursuit
+#     p_avg_angle = 1e+4
+#     p_on = 0
+#     p_off = 0
+#
+#     onset_offset_saccade = detectOnsetOffset(eye_event2 == 1)
+#
+#     ps2_end = len(eye_event2)
+#     ps3_start = ps2_end
+#     dist_angle = np.sqrt(np.sum(np.square(gaze - ball), -1))  # use azimuth and elevation
+#     # dist_angle = np.sqrt(np.square(gaze[:, 0] - ball[:, 0]))  # use azimuth only
+#     # detect pursuit
+#     dist_angle3 = dist_angle[ps3_start:]
+#     pursuit_events_idx = detectOnsetOffset((eye_event3 == 2) & (dist_angle3 <= th_angle_p))
+#
+#     if (len(onset_offset_saccade) > 0) & (len(pursuit_events_idx) > 0):
+#         first_pursuit = pursuit_events_idx[0]
+#         last_pursuit = pursuit_events_idx[-1]
+#         ball_pursuit = ball[first_pursuit[0], 0]
+#         for on, off in onset_offset_saccade:
+#             gaze_saccade = gaze[off, 0]
+#             dist_sp = np.sqrt(np.sum(np.square(gaze_saccade - ball_pursuit)))
+#             # print(dist_sp)
+#             if dist_sp <= th:
+#                 al_angle = dist_sp
+#                 al_onset = on
+#                 al_offset = off
+#                 al_magnitude = np.sqrt(np.sum(np.square(gaze[off] - gaze[on]))) / ((off - on) + 1e-5)
+#
+#     if len(pursuit_events_idx) > 0:
+#         first_pursuit = pursuit_events_idx[0]
+#         last_pursuit = pursuit_events_idx[-1]
+#         p_on = first_pursuit[0]
+#         p_off = last_pursuit[1]
+#         p_avg_angle_list = []
+#         for p_on, p_off in pursuit_events_idx:
+#             p_avg_angle_list.append(dist_angle3[p_on:p_off])
+#
+#         p_avg_angle = np.average(np.concatenate(p_avg_angle_list))
+#     else:
+#         if np.average((eye_event3 == 2) & (dist_angle3 <= th_angle_p)) == 1:
+#             p_on = 0
+#             p_off = len(dist_angle3) - 1
+#             p_avg_angle = np.average(dist_angle3)
+#         # else:
+#         #     plt.plot(dist_angle3)
+#         #     plt.show()
+#
+#     return np.array([al_angle, al_magnitude, al_onset, al_offset]), np.array([p_avg_angle, p_on, p_off])

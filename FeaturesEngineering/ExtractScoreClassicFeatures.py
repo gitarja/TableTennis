@@ -50,22 +50,26 @@ if __name__ == '__main__':
 
         n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1, mov_var2, mov_var3 = computeScore(
             success, failures, ball_trajetories=ball["trajectories"].values, wall_trajectories=wall["trajectories"])
+
+        for sub_i, tobii_i in zip(sub, tobii):
+            features_extractor = Classic(sub_i, racket, ball, tobii_i, table, wall)
+            s_fsc, _ = features_extractor.extractForwardswing(prev=False)
         # extract anticipatory features
 
         if len(sub) == 1:
             summary_data.append(
                 [file_name, sub[0]["name"], "", n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull,
                  bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1, mov_var2,
-                 mov_var3])
+                 mov_var3, s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
         else:
             summary_data.append(
                 [file_name, sub[0]["name"], sub[1]["name"], n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq,
                  bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1,
-                 mov_var2, mov_var3])
+                 mov_var2, mov_var3, s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
 
 columns = ["file_name", "Subject1", "Subject2", "n_success", "n_failures", "norm_score", "skill", "task_score",
            "max_seq", "avg_seq", "bounce_hull", "bounce_std", "bounce_sp_entropy", "bounce_sc_entropy", "rt_lyp",
-           "samp_en", "std_rt", "var_p1", "var_p2", "var_p3"]
+           "samp_en", "std_rt", "var_p1", "var_p2", "var_p3", "avg_start_fs", "std_start_fs"]
 summary_df = pd.DataFrame(summary_data, columns=columns)
 
 # summarize the results
@@ -79,4 +83,4 @@ kmeans = KMeans(n_clusters=3, random_state=0, n_init=20).fit(X_scaled)
 
 session_class = kmeans.labels_
 summary_df['session_class'] = session_class
-summary_df.to_csv(result_path + "summary\\" + "double_summary.csv")
+summary_df.to_csv(result_path + "summary\\" + "single_summary.csv")

@@ -1,6 +1,6 @@
 import numpy as np
 from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToSpher
-from FeaturesEngineering.GazeEvent import detectALPhase1, detectALPhase2, saccadeFeatures, detectSaccade, groupingFixation
+from FeaturesEngineering.GazeEvent import saccadeFeatures, detectSaccade
 from FeaturesEngineering.FeaturesLib import computeSegmentAngles, computeVelAcc
 import pandas as pd
 from Utils.DataReader import TobiiReader
@@ -11,7 +11,15 @@ from FeaturesEngineering.Plotting import gazeEventsPlotting
 
 class Classic:
 
-    def __init__(self, sub, racket, ball, tobii, table, wall):
+    def __init__(self, sub:dict, racket:dict, ball:dict, tobii:dict, table:dict, wall:dict):
+        '''
+        :param sub: dictionary of subjects
+        :param racket:dictionary of racket
+        :param ball:dictionary of ball
+        :param tobii:dictionary of tobii
+        :param table:dictionary of table
+        :param wall:dictionary of wall
+        '''
         # tobii reader
         self.tobii_reader = TobiiReader()
 
@@ -68,6 +76,10 @@ class Classic:
         self.normalizeTobii()
 
     def normalizeTobii(self):
+        '''
+        perform gap filling in Tobii
+        :return:
+        '''
         for e in self.all_episodes :
             start = e[0] - 10
             stop = e[1] + 10
@@ -78,10 +90,14 @@ class Classic:
             self.gaze_point[start:stop] = self.tobii_reader.gapFill(self.gaze_point[start:stop])
 
     def smoothBall(self, ball: np.array) -> np.array:
+        '''
+        :param ball: ball in the world
+        :return: smoothed ball trajectory
+        '''
         ball = np.array([movingAverage(ball[:, i], n=1) for i in range(3)]).transpose()
         return ball
 
-    def eventToLabels(self, e_idx: int = 0):
+    def eventToLabels(self, e_idx: int = 0) -> str:
         if e_idx == 0:
             return "Ball_Hit"
         elif e_idx == 2:
@@ -94,7 +110,7 @@ class Classic:
             return "Unknown"
 
     def distanceBallBeforeEvent(self, ball: np.array, segment: np.array, episodes: np.array, e_idx: int = 1,
-                                n: int = 10, ball_last=False):
+                                n: int = 10, ball_last=False)-> dict:
         '''
         how a segment changes over time in respect to the last ball
         :param ball: ball trajectory vector
@@ -125,7 +141,7 @@ class Classic:
 
         return features_summary
 
-    def distanceBallOverTime(self, ball: np.array, segment, episode, e_idx: int = 1, n: int = 15, ball_relative=False):
+    def distanceBallOverTime(self, ball: np.array, segment, episode, e_idx: int = 1, n: int = 15, ball_relative=False)-> dict:
         '''
         :param ball: ball trajectory vector
         :param episodes: episodes
@@ -155,7 +171,7 @@ class Classic:
         }
         return features_summary
 
-    def detectGazeEvents(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True):
+    def detectGazeEvents(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True)-> dict:
         '''
         Detect the onset and offset of saccade and pursuit in 3 phases
         :param th_al_p1:  degree/frame (saccade offset - ball trajectory) of AL in phase 1
@@ -182,6 +198,11 @@ class Classic:
         i=0
 
         for se in episode :
+            # episode index (0:hit1, 1:hit2, 2:bounce_wall, 3:bounce_table)
+            # p1 = hit1 -> bounce wall
+            # p2 = bounce_wall -> bounce table
+            # p3 = bounce_table -> hit2
+
             # phase 1
             p1_s = se[0]-3
             p1_e = se[2]
@@ -206,6 +227,7 @@ class Classic:
             gaze_ih = gaze - tobii_avg
             ball_ih = ball - tobii_avg
             win_length = 10
+            # do normalize the start and the end of the episode
             p1s, p1e = p1_s - p1_s, p1_e - p1_s
             p2s, p2e = p2_s - p1_s, p2_e - p1_s
             p3s, p3e = p3_s - p1_s, p3_e - p1_s
@@ -270,7 +292,7 @@ class Classic:
 
 
 
-    def gazeBallAngleBeforeEvent(self, episodes=None, e_idx=1, n: int = 15):
+    def gazeBallAngleBeforeEvent(self, episodes=None, e_idx=1, n: int = 15)-> dict:
         '''
         :param episodes: episodes
         :param n: n frame before the event
@@ -306,7 +328,7 @@ class Classic:
 
         return features_summary
 
-    def angleAtEvent(self, seg1: np.array, seg2: np.array, episodes: np.array, e_idx: int = 2):
+    def angleAtEvent(self, seg1: np.array, seg2: np.array, episodes: np.array, e_idx: int = 2)-> dict:
         '''
         :param seg1: trajectory of segment 1
         :param seg2: trajectory of segment 2
@@ -329,7 +351,14 @@ class Classic:
 
         return features_summary
 
-    def segmentPositionAtEvent(self, seg: np.array, episode: np.array, e_idx: int = 1, label="position"):
+    def segmentPositionAtEvent(self, seg: np.array, episode: np.array, e_idx: int = 1, label="position")-> dict:
+        '''
+        :param seg: segment array
+        :param episode: episode
+        :param e_idx: index of the event in an episode (0: hit1, 1: hit2, 2: bounce on the wall, 3: bounce on the table)
+        :param label: label of the features
+        :return:
+        '''
         position_list = []
         for e in episode:
             position_list.append(seg[e[e_idx]])
@@ -342,7 +371,16 @@ class Classic:
         return features_summary
 
     def prevCurrectAtEvent(self, v: np.array, ref_episodes: np.array, current_episodes: np.array,
-                           prev_episodes: np.array, e_idx, label="position"):
+                           prev_episodes: np.array, e_idx, label="position")-> dict:
+        '''
+        :param v: segment of trajectories
+        :param ref_episodes: reference episodes
+        :param current_episodes: current episodes
+        :param prev_episodes: previous episodes
+        :param e_idx: index of the event
+        :param label: label of the event
+        :return:
+        '''
         prev_list = []
         current_list = []
         for i in prev_episodes:
@@ -360,7 +398,15 @@ class Classic:
         }
         return features_summary
 
-    def velocityAcceleration(self, seg:np.array, episode:np.array, e_idx:int=1, n:int=15, avg=False):
+    def velocityAcceleration(self, seg:np.array, episode:np.array, e_idx:int=1, n:int=15, avg=False)-> dict:
+        '''
+        :param seg: segments
+        :param episode: episodes
+        :param e_idx: index of the event
+        :param n: start of the segment whose velocity will be computed about
+        :param avg: whether to perform average or not
+        :return:
+        '''
         speed_list = []
         vel_list = []
         acc_list = []
@@ -389,44 +435,62 @@ class Classic:
         return features_summary
 
 
-    def startForwardSwing(self, episode:np.array):
-        dist_wall = np.linalg.norm(self.table_segment[:, 1:] - self.racket_segment_T[:, 1:], axis=-1)
+    def startForwardSwing(self, episode:np.array)-> dict:
+        '''
+        compute the start time of forward swing
+        start of forward swing: total number of frames taken for individuals to hit the ball after it bounces on the table
+        :param episode: episodes
+        :return: the list of start time of forward swing
+        '''
+        vel_racket = np.linalg.norm(self.racket_segment_T[1:, ] - self.racket_segment_T[:-1, ], axis=-1)
+        acc_racket = np.diff(np.pad(vel_racket, (1, 1), 'symmetric'), n=1, axis=0)
         rt_list = []
         for e in episode:
-            start = e[0]
+            start = e[2]
             end = e[1]
 
-            rt_dist = dist_wall[start:end]
-            peaks, _ = find_peaks(rt_dist, distance=50)
+            rt_vel = acc_racket[start:end]
+            peaks, _ = find_peaks(rt_vel, distance=10)
+            # print()
+            #
+            # plt.subplot(2, 1, 1)
+            # plt.plot(vel_racket[start:end])
+            # plt.vlines(peaks, np.min(racket_split), np.max(racket_split), colors="red")
+            # plt.subplot(2, 1, 2)
+            # plt.plot(dist_wall[start:end])
+            # plt.vlines(peaks, np.min(dist_wall[start:end]), np.max(dist_wall[start:end]), colors="red")
+            # plt.show()
+
 
             if len(peaks) == 0:
-                print(e)
-                racket_split = np.diff(self.racket_segment_T[start:end, 1], n=1) *  -1
-                racket_split = np.append(racket_split[0], racket_split)
-                peaks, _ = find_peaks(racket_split, distance=50)
-                if len(peaks) > 0:
-                    rt = (e[1] - e[0]) - peaks[-1]
-                    rt_list.append(rt)
-                else:
-                    rt_list.append(1e+4)
-                # plt.subplot(2, 1, 1)
-                # plt.plot(racket_split)
-                # plt.vlines(peaks, np.min(racket_split), np.max(racket_split), colors="red")
-                # plt.subplot(2, 1, 2)
-                # plt.plot(dist_wall[start:end])
-                # plt.vlines(peaks, np.min(dist_wall[start:end]), np.max(dist_wall[start:end]), colors="red")
-                # plt.show()
+                # print(e)
+                # racket_split = np.diff(self.racket_segment_T[start:end, 1], n=1) *  -1
+                # racket_split = np.append(racket_split[0], racket_split)
+                # peaks, _ = find_peaks(racket_split, distance=50)
+                # if len(peaks) > 0:
+                #     rt = (e[1] - e[0]) - peaks[-1]
+                #     rt_list.append(rt)
+                # else:
+                rt_list.append(np.nan)
 
             else:
-                rt = (e[1] - e[0]) - peaks[-1]
-                rt_list.append(rt)
+                high_peaks = peaks[-1]
+                # rt = (e[1] - e[2]) - high_peaks
+                # rt = (e[1] - e[2]) - high_peaks
+                rt_list.append(high_peaks)
 
         features_summary = {
-            "start_fs": np.asarray(rt_list),
+            "avg_start_fs": np.nanmean(np.asarray(rt_list)),
+            "std_start_fs": np.nanstd(rt_list),
         }
 
         return features_summary
-    def extractBallContactPosition(self, prev=False):
+    def extractBallContactPosition(self, prev=False)-> tuple:
+        '''
+        extract the position of the ball
+        :param prev: whether consider previous episode or not
+        :return: the position of the ball when individual succeed or fail
+        '''
         if prev:
             success_positions = self.prevCurrectAtEvent(self.ball_t, self.success_idx, self.success_idx, self.prev_s_idx, 1)
             failure_position = self.prevCurrectAtEvent(self.ball_t, self.success_idx, self.failures_idx, self.prev_f_idx, 1)
@@ -438,7 +502,13 @@ class Classic:
         return success_positions, failure_position
 
 
-    def extractRacketVelocity(self, e_idx: int=1, n:int=15, prev=False):
+    def extractRacketVelocity(self, e_idx: int=1, n:int=15, prev=False)->tuple:
+        '''
+        :param e_idx: index of the event
+        :param n: the start of the array before the event
+        :param prev: whether consider previous episode or not
+        :return: velocity and acceleration of the racket
+        '''
 
         if prev:
             success_s_v_a = self.velocityAcceleration(self.racket_segment_T, self.success_idx[self.prev_s_idx[:, 0]], e_idx, n=n)
@@ -449,7 +519,13 @@ class Classic:
 
         return success_s_v_a, failures_s_v_a
 
-    def extractRWirst(self, e_idx: int=1, n:int=15, prev=False):
+    def extractRWirst(self, e_idx: int=1, n:int=15, prev=False)-> tuple:
+        '''
+        :param e_idx: index of the event
+        :param n: the start of the array before the event
+        :param prev: whether consider previous episode or not
+        :return: velocity and accrelation of right wrist
+        '''
 
         if prev:
             success_s_v_a = self.velocityAcceleration(self.racket_segment_R, self.success_idx[self.prev_s_idx[:, 0]], e_idx, n=n, avg=True)
@@ -461,7 +537,11 @@ class Classic:
         return success_s_v_a, failures_s_v_a
 
 
-    def extractRacketBallAngleImpact(self, prev=False):
+    def extractRacketBallAngleImpact(self, prev=False) -> tuple:
+        '''
+        :param prev: whether consider previous episode or not
+        :return: the angle between the racket and the ball at the impact
+        '''
         # import matplotlib.pyplot as plt
         # fig = plt.figure()
         # ax = fig.add_subplot(projection='3d')
@@ -484,6 +564,10 @@ class Classic:
 
 
     def extractForwardswing(self, prev=False):
+        '''
+        :param prev: whether consider previous episode or not
+        :return: the time when individuals start the forward swing
+        '''
 
         if prev:
             success_rt = self.startForwardSwing(self.success_idx[self.prev_s_idx[:, 0]])
@@ -498,6 +582,10 @@ class Classic:
 
 
     def extractSaccadePursuit(self, normalize=True):
+        '''
+        :param normalize: whether to normalize the results or not
+        :return: the features of anticipatory look
+        '''
         success_rt = self.detectGazeEvents(self.success_idx, normalize=normalize, th_angle_p=25)
         failures_rt = []
         if len(self.failures_idx)> 0:
@@ -508,6 +596,11 @@ class Classic:
 
 
     def extractGazeBallAngle(self, e_idx=1, n=20):
+        '''
+        :param e_idx: event index
+        :param n: the n frame before the event
+        :return: the angle between the gaze and the ball
+        '''
 
         success_angle = self.gazeBallAngleBeforeEvent(self.success_idx, e_idx=e_idx, n=n)
         failure_angle = self.gazeBallAngleBeforeEvent(self.failures_idx, e_idx=e_idx, n=n)
