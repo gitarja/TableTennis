@@ -1,6 +1,6 @@
 import numpy as np
 from Utils.Lib import wienerFilter, movingAverage, savgolFilter, cartesianToSpher
-from FeaturesEngineering.GazeEvent import saccadeFeatures, detectSaccade
+from FeaturesEngineering.GazeEvent import saccadeFeatures, detectSaccade, fixationSPFeatures
 from FeaturesEngineering.FeaturesLib import computeSegmentAngles, computeVelAcc
 import pandas as pd
 from Utils.DataReader import TobiiReader
@@ -190,6 +190,9 @@ class Classic:
         anticipation_phase2_list = np.zeros(shape=(len(episode), 10))
         anticipation_phase3_list = np.zeros(shape=(len(episode), 10))
 
+        # attended fixation and sp features
+        fsp_phase3_list = np.zeros(shape=(len(episode), 5))
+
         ball_n = self.ball_t
 
         gaze_n = self.tobii_reader.local2GlobalGaze(self.gaze_point, self.tobii_segment_T, self.tobii_segment_R,
@@ -259,6 +262,9 @@ class Classic:
                     al_cs_labels.append(al_cs_p2)
                     if np.sum(al_cs_p2 == 1) == 1:
                         anticipation_phase2_list[i] = saccades_phase2[al_cs_p2 == 1]
+                        if len(onset_offset_sp) > 0:
+                            fsp_phase3 = fixationSPFeatures(onset_offset_sp, saccade_p2[al_cs_p2 == 1], gaze_ih, ball_ih, phase_start=p3s, phase_end=p3e)
+                            fsp_phase3_list[i] = fsp_phase3
 
                 # print("------------------------Phase3------------------------")
                 if len(saccade_p3) > 0:
@@ -286,6 +292,7 @@ class Classic:
                 "saccade_p1": anticipation_phase1_list,
                 "saccade_p2": anticipation_phase2_list,
                 "saccade_p3": anticipation_phase3_list,
+                "fsp_phase3": fsp_phase3_list,
         }
 
         return features_summary

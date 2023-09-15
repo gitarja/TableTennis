@@ -48,7 +48,7 @@ if __name__ == '__main__':
         success = ball["success_idx"]
         failures = ball["failures_idx"]
 
-        n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1, mov_var2, mov_var3 = computeScore(
+        n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_avg1, mov_avg2, mov_avg3, mov_var1, mov_var2, mov_var3 = computeScore(
             success, failures, ball_trajetories=ball["trajectories"].values, wall_trajectories=wall["trajectories"])
 
         for sub_i, tobii_i in zip(sub, tobii):
@@ -59,17 +59,17 @@ if __name__ == '__main__':
         if len(sub) == 1:
             summary_data.append(
                 [file_name, sub[0]["name"], "", n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq, bounce_hull,
-                 bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1, mov_var2,
-                 mov_var3, s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
+                 bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_avg1, mov_avg2, mov_avg3, mov_var1, mov_var2, mov_var3,
+                 s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
         else:
             summary_data.append(
                 [file_name, sub[0]["name"], sub[1]["name"], n_s, n_f, mix_score, skill, task_score, max_seq, avg_seq,
-                 bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_var1,
-                 mov_var2, mov_var3, s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
+                 bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy, rt_lypanov, samp_en, std_rt, mov_avg1, mov_avg2, mov_avg3, mov_var1, mov_var2, mov_var3,
+                 s_fsc["avg_start_fs"], s_fsc["std_start_fs"]])
 
 columns = ["file_name", "Subject1", "Subject2", "n_success", "n_failures", "norm_score", "skill", "task_score",
            "max_seq", "avg_seq", "bounce_hull", "bounce_std", "bounce_sp_entropy", "bounce_sc_entropy", "rt_lyp",
-           "samp_en", "std_rt", "var_p1", "var_p2", "var_p3", "avg_start_fs", "std_start_fs"]
+           "samp_en", "std_rt", "avg_p1", "avg_p2", "avg_p3","var_p1","var_p2","var_p3", "avg_start_fs", "std_start_fs"]
 summary_df = pd.DataFrame(summary_data, columns=columns)
 
 # summarize the results

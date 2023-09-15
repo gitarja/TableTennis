@@ -54,16 +54,29 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
         onset_offset_saccade[:, 0] = onset_offset_saccade[:, 0] -1
         onset_offset_saccade[:, 1] = onset_offset_saccade[:, 1] + 2
 
+    # relabel saccade
+    for on, off in onset_offset_saccade:
+        labels_saccade[on:off+1] = 1
+
     # detect pursuit
+    # ball_gaze_dist = computeSegmentAngles(ball - tobii, gaze - tobii)
     labels_sp = np.zeros(N_label)
     vel_ratio = vel_gaze_h / (vel_ball + 1e-15)
-    ball_gaze_dist = computeSegmentAngles(ball - tobii, gaze - tobii)
-    labels_sp[(ball_gaze_dist<=10) & ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 2.0))] = 1  # pursuit gain
-    onset_offset_sp = detectOnsetOffset(labels_sp == 1, type="sp")
+    _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze - tobii_avg, swap=False)
+    _, ball_az, ball_elv = cartesianToSpher(vector=ball - tobii_avg, swap=False)
+
+    # when computing the angle between the gaze and the ball, both of them shuld be converted into visual field
+    gaze_view = np.vstack([gaze_az, gaze_elv]).transpose()
+    ball_view = np.vstack([ball_az, ball_elv]).transpose()
+    ball_gaze_dist = np.linalg.norm(gaze_view - ball_view, axis=-1)
+    # labels_sp[(ball_gaze_dist<=15) & ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 2.0))] = 1  # pursuit gain
+    labels_sp[((ball_gaze_dist<10) | ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 1.2)))] = 1  # pursuit gain
     labels_sp[labels_saccade==1] = 0
+    onset_offset_sp = detectOnsetOffset(labels_sp == 1, type="sp")
     onset_offset_sp = groupPursuit(onset_offset_sp)
 
-    # detect fixation
+    # detect
+
     labels_fix = np.ones(N_label)
     for on, off in onset_offset_saccade:
         labels_fix[on:off+1] = 0
@@ -143,8 +156,8 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
     Global magnitude            =gm
 
     :param onset_offset: onset and offset episodes
-    :param gaze: gaze in the world
-    :param ball: ball in the world
+    :param gaze: gaze in the world (gaze-tobii)
+    :param ball: ball in the world  (ball-tobii)
     :return: concatenate features
 
     One should note that we use gaze and ball information in the world space and visual-field space
@@ -167,6 +180,7 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
 
 
     features = []
+
     if len(onset_offset) > 0:
         for on, off in onset_offset:
             # print(on)
@@ -190,15 +204,15 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
                 after_ofset_angle = np.linalg.norm(gaze_at_offset- ball_after_offset, axis=-1)
 
 
-                on_event = (phase_end - on) * 10
-                off_event = (phase_end - off) * 10
 
-                # if phase_2:
-                #     on_event = (on - phase_start) * 10
-                #     off_event = (off - phase_start) * 10
-                # else:
-                #     on_event = (phase_end - on) * 10
-                #     off_event = (phase_end - off) * 10
+
+                if phase_2:
+                    on_event = ((phase_end - phase_start) - (on - phase_start))  * 10
+                    off_event = ((phase_end - phase_start) - (off - phase_start))  * 10
+                else:
+                    on_event = (phase_end - on) * 10
+                    off_event = (phase_end - off) * 10
+
 
                 # concatenate saccades features
                 try:
@@ -230,6 +244,54 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
     return features_clean, al_cs
 
 
+def fixationSPFeatures(onset_offset_fsp:np.array, onset_offset_al_p2:np.array, gaze: np.array, ball: np.array,  phase_start=0, phase_end=100) -> np.array:
+    '''
+    Extract features of fsp that occurs immediately after AL in the P2
+    :param onset_offset_fsp:
+    :param onset_offset_al_p2:
+    :param gaze:
+    :param ball:
+    :return:
+    '''
+
+    idx = onset_offset_fsp[:, 0] > onset_offset_al_p2[0,1]
+    # print(idx)
+    if np.sum(idx) > 0:
+        features = []
+        on, off = onset_offset_fsp[np.argwhere(idx)[0,0]]
+
+        _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze, swap=False)
+        _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
+
+        # when computing the angle between the gaze and the ball, both of them shuld be converted into visual field
+        gaze_view = np.vstack([gaze_az, gaze_elv]).transpose()
+        ball_view = np.vstack([ball_az, ball_elv]).transpose()
+
+        dist_angle = np.linalg.norm(gaze_view - ball_view, axis=-1)
+
+
+        # compute the features
+        on_event = ((phase_end - phase_start) - (on - phase_start)) * 10
+        off_event = ((phase_end - phase_start) - (off - phase_start)) * 10
+
+        mean_dist = np.nanmean(dist_angle[on:off])
+        min_dist = np.nanmin(dist_angle[on:off])
+
+        features.append([
+            on_event,
+            off_event,
+            (off - on) * 10,
+            mean_dist,
+            min_dist
+
+        ])
+
+        features = np.asarray(features)
+
+        return features
+    else:
+        return np.zeros((1,5))
+
 def detectOnsetOffset(v: np.array, type="saccade") -> np.array:
     '''
     :param v: events vector
@@ -247,7 +309,7 @@ def detectOnsetOffset(v: np.array, type="saccade") -> np.array:
             on = np.min(valley_group)
             off = np.max(valley_group)
             if type == "sp":
-                th_duration = 1
+                th_duration = 0
             elif type == "fix":
                 th_duration = 0
             else:
@@ -322,6 +384,12 @@ def groupPursuit(onset_offset:np.array) -> np.array:
             new_onset_offset.append([onset, offset])
 
         new_onset_offset = np.asarray(new_onset_offset).astype(int)
+        # clean sp less than 100 ms
+        for i in range(len(new_onset_offset)):
+            on, off = new_onset_offset[i]
+            if (off - on) < 5:
+                new_onset_offset[i] = new_onset_offset[i] * 0
+
         # delete merged elements
         new_onset_offset = new_onset_offset[new_onset_offset[:, 1] != 0]
         return new_onset_offset
