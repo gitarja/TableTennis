@@ -1,4 +1,4 @@
-x_column = [
+x_global_column = [
     'std_rt',
     'avg_p1',
     'avg_p2',
@@ -43,23 +43,69 @@ x_column = [
     'fsp3_sampen',
     'fsp3_std'
 ]
-y_column = ["skill"]
-
+y_global_column = ["skill"]
 
 x_lasso_column = [
-"avg_start_fs",
-"var_p1",
-"fsp3_sampen",
-"avg_p2",
-"p1_std",
-"std_rt",
-"p1_mda",
-"p1_occ",
-"p1_sampen",
-"p1_md",
-"p1_off",
-"var_p2",
-"p1_gm",
-"std_start_fs",
-"p1_on",
-"fsp3_mfs"]
+    "avg_start_fs",
+    "var_p1",
+    "fsp3_sampen",
+    "avg_p2",
+    "p1_std",
+    "std_rt",
+    "p1_mda",
+    "p1_occ",
+    "p1_sampen",
+    "p1_md",
+    "p1_off",
+    "var_p2",
+    "p1_gm",
+    "std_start_fs",
+    "p1_on",
+    "fsp3_mfs"]
+
+x_episode_columns = [
+    "p1_al",
+    "p2_al",
+    "p3_fx",
+    "p1_sc_on",
+    "p1_sc_off",
+    "p1_sc_du",
+    "p1_sc_meDa",
+    "p1_sc_meDo",
+    "p1_sc_miDo",
+    "p1_sc_maDo",
+    "p1_sc_meM",
+    "p1_sc_sumM",
+    "p1_sc_gM",
+    "p2_sc_on",
+    "p2_sc_off",
+    "p2_sc_du",
+    "p2_sc_meDa",
+    "p2_sc_meDo",
+    "p2_sc_miDo",
+    "p2_sc_maDo",
+    "p2_sc_meM",
+    "p2_sc_sumM",
+    "p2_sc_gM",
+    "p3_fx_on",
+    "p3_fx_off",
+    "p3_fx_du",
+    "p3_meDa",
+    "p3_miDa",
+    "start_fs",
+    "e1_angle",
+    "e2_angle",
+    "e3_angle",
+    "e4_angle",
+    "fs_racket_speed",
+    "fs_racket_acc",
+    "fs_ball_speed",
+    "fs_ball_acc"]
+
+y_episode_column = ["success"]
+
+excluded_subject = ["SE010C", "SE011A", "SE029C", "SE029A", "SE030B", "SE033A", "SE014B", "SE020B", "SE014A", "SE011C",
+                    "SE018A", "SE017C"]
+
+RACKET_MASS = 142.20 # in gram
+BALL_MASS = 4.04 # in gram

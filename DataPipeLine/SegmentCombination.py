@@ -1,8 +1,8 @@
 from Utils.DataReader import SubjectObjectReader
 import pickle
-result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-11-15_M\\"
+result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2023-03-16_A\\"
 
-file_name = "2022-11-15_M_T01"
+file_name = "2023-03-16_A_T03"
 
 # clean data
 reader = SubjectObjectReader()

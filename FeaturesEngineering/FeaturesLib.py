@@ -7,6 +7,13 @@ from scipy.stats import gaussian_kde as kde, entropy
 from scipy.signal import welch
 
 
+def whichShoulder(racket, r_wirst, l_wrist):
+    r_r = np.linalg.norm(racket - r_wirst)
+    l_r = np.linalg.norm(racket - l_wrist)
+
+    if r_r < l_r:
+        return True
+    return False
 def computeVelAccV2(v: np.array, normalize=True) -> np.array:
     '''
     :param v: vector
@@ -68,13 +75,16 @@ def computeHistBouce(ball: np.array, episodes: np.array):
     return np.vstack(wall_bounce), np.vstack(table_bounce)
 
 
-def computeVelAcc(v):
+def computeVelAcc(v, speed_only=False, acc_only =False):
     v1 = v[:-1]
     v2 = v[1:]
     speed = np.linalg.norm(v2 - v1, axis=-1)
     vel = np.sum(np.diff(v, n=1, axis=0), axis=-1)
     acc = np.diff(speed, n=1, axis=-1)
-
+    if speed_only:
+        return speed
+    elif acc_only:
+        return acc
     return speed, vel, acc
 
 
@@ -132,7 +142,7 @@ def computeLypanovMax(v, emb_dim=10):
     if len(v) <= (emb_dim + 10):
         return np.nan
     v = (v - np.mean(v)) / np.std(v)
-    return lyapunovExponent(v, emb_dim=emb_dim, matrix_dim=4)
+    return lyapunovExponent(v, emb_dim=emb_dim, matrix_dim=2)
 
 
 def computeSampEn(v, emb_dim=10, r=0.4):
@@ -145,6 +155,16 @@ def computeSampEn(v, emb_dim=10, r=0.4):
         print("error_se")
     return nolds.sampen(v, emb_dim=emb_dim, tolerance=tolerance)
 
+def computeSkill(s, f):
+    if len(f) > 0:
+        s = s[~np.in1d(s[:, 1], f[:, 1])]
+
+    n_s = len(s)
+    n_f = len(f)
+
+    skill = n_s / (n_s + n_f)
+
+    return skill
 
 def computeScore(s, f, max_time=360., ball_trajetories=None, wall_trajectories=None):
     wall_x_min, wall_x_max = np.nanmin(wall_trajectories.filter(regex='_X').values), np.nanmax(
@@ -223,14 +243,14 @@ def computeScore(s, f, max_time=360., ball_trajetories=None, wall_trajectories=N
 
     mix_score = (n_s - n_f) / (duration)
     # skill = n_s / avg_episode
-    skill = max_seq / (duration)
+    skill = n_s / (n_s + n_f)
     # task_score = duration / (n_f + 1)
     task_score = (n_s / (n_f + n_s)) * (d_s / duration)
 
 
     # ball
     bounce_hull, bounce_std, bounce_sp_entropy, bounce_sc_entropy = computeBallHullSTD(s, ball_trajetories)
-    rt_lypanov = computeLypanovMax(s[:, 1] - s[:, 0], emb_dim=3)
+    rt_lypanov = computeLypanovMax(s[:, 1] - s[:, 0], emb_dim=2)
     samp_en = computeSampEn(s[:, 1] - s[:, 0], emb_dim=2, r=0.55)
     std_rt = computeRTSTD(s)
     mov_avg1, mov_avg2, mov_avg3, mov_var1, mov_var2, mov_var3 = computeVarMov(s)

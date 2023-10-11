@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 import numpy as np
 from Analysis.Lib import transformScore
-from Analysis.Conf import x_column, y_column, x_lasso_column
 from sklearn.feature_selection import r_regression
 
 results_path = "F:\\users\\prasetia\\results\\TableTennis\\"

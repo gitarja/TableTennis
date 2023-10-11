@@ -88,8 +88,8 @@ class SegmentsCleaner:
 
         nan_mask = ~np.isnan(np.sum(trajectories, -1))
 
-        th_l = mean_dist - 10
-        th_u = mean_dist + 10
+        th_l = mean_dist - 7
+        th_u = mean_dist + 7
         condition = (~((dist >= th_l) & (dist <= th_u)) & nan_mask)
 
         return self.cleanData(segment, condition)
@@ -105,7 +105,7 @@ if __name__ == '__main__':
     double_df = ref_df.loc[ref_df.Trial_Type == "P"]
     double_df_unique = double_df.loc[double_df.Session_Code.drop_duplicates().index]
 
-    for i, d in double_df_unique.iterrows():
+    for i, d in single_df.iterrows():
         dates = d["Date"].replace(".", "-")
         session = d["Session"]
         trial = d["Trial"]
@@ -113,7 +113,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if file_name == "2022-11-15_M_T05":
+        if file_name == "2023-03-16_A_T03":
             print(file_name)
             file_session_path = file_path + folder_name + "\\"
             result_session_path = result_path + folder_name + "\\"
