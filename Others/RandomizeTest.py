@@ -2,13 +2,13 @@ import random
 
 
 
-candidate = ["A", "B", "C", "A_B", "A_C", "B_C"]
+candidate = ["P_1", "P_2", "P_3", "P_4"]
 is_print=True
 for i in range(200):
     random.shuffle(candidate)
     for j in range(len(candidate)-2):
         is_print = True
-        if len(candidate[j]) == 1:
+        if len(candidate[j]) == 3:
             if (candidate[j] in candidate[j+1])& (candidate[j] in candidate[j+2]):
                 is_print = False
                 break

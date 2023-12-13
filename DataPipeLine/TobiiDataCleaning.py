@@ -104,7 +104,7 @@ if __name__ == '__main__':
     double_df = ref_df.loc[ref_df.Trial_Type == "P"]
     double_df_unique = double_df.loc[double_df.Session_Code.drop_duplicates().index]
 
-    for i, d in double_df_unique.iterrows():
+    for i, d in single_df.iterrows():
         dates = d["Date"].replace(".", "-")
         session = d["Session"]
         trial = d["Trial"]
@@ -112,7 +112,7 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if "2022-12-07_M_T03" in file_name:
+        if "2022-11-09_A_T07" in file_name:
 
             try:
                 reader = SubjectObjectReader()
@@ -140,11 +140,11 @@ if __name__ == '__main__':
                 data = [obj, sub, ball, tobii_results]
 
 
-
-                with open(
-                        result_path + folder_name + "\\" + file_name + "_complete.pkl",
-                        'wb') as f:
-                    pickle.dump(data, f)
+                #
+                # with open(
+                #         result_path + folder_name + "\\" + file_name + "_complete.pkl",
+                #         'wb') as f:
+                #     pickle.dump(data, f)
             except:
 
                 print("Error: " + file_name + ", ")

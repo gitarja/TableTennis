@@ -3,10 +3,11 @@ from scipy.signal import savgol_filter
 import matplotlib.pyplot as plt
 from scipy import signal
 from Utils.Lib import movingAverage
-from scipy.ndimage import label
-from FeaturesEngineering.FeaturesLib import computeVectorsDirection, computeVelAccV2, computeSegmentAngles
+from FeaturesEngineering.FeaturesLib import computeVectorsDirection, computeVelAccV2, computeSegmentAngles, computeNormalizedED, computeNormalizedCrossCorr
 from Utils.Lib import cartesianToSpher
 from Utils.Interpolate import interpolate
+from scipy.ndimage import label
+
 
 
 def detectGazeEvent( gaze: np.array, ball: np.array, tobii: np.array):
@@ -75,7 +76,7 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     # detect pursuit
     # ball_gaze_dist = computeSegmentAngles(ball - tobii, gaze - tobii)
     labels_sp = np.zeros(N_label)
-    vel_ratio = vel_gaze_h / (vel_ball + 1e-15)
+    vel_ratio =   vel_gaze_h / (vel_ball + 1e-15)
     _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze - tobii_avg, swap=False)
     _, ball_az, ball_elv = cartesianToSpher(vector=ball - tobii_avg, swap=False)
 
@@ -84,7 +85,8 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     ball_view = np.vstack([ball_az, ball_elv]).transpose()
     ball_gaze_dist = np.linalg.norm(gaze_view - ball_view, axis=-1)
     # labels_sp[(ball_gaze_dist<=15) & ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 2.0))] = 1  # pursuit gain
-    labels_sp[((ball_gaze_dist<15) | ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 1.2)))] = 1  # pursuit gain
+    # setting the dist to 5 will reduce the number of smooth pursuit, better to use 10
+    labels_sp[((ball_gaze_dist<=10) | ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 1.2)))] = 1  # pursuit gain
     labels_sp[labels_saccade==1] = 0
     onset_offset_sp = detectOnsetOffset(labels_sp == 1, type="sp")
     onset_offset_sp = groupPursuit(onset_offset_sp)
@@ -220,10 +222,19 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
                 mda = np.nanmean(dist_angle[on:off])
 
                 # compute med-diff and mean-diff
-                ball_after_offset = ball_view[off:off + win_length]
-                gaze_at_offset = np.ones_like(ball_after_offset) * gaze_view[off]
-                # after_ofset_angle = computeSegmentAngles(np.ones_like(ball_after_offset) * gaze_view[off], ball_after_offset)
-                after_ofset_angle = np.linalg.norm(gaze_at_offset- ball_after_offset, axis=-1)
+                # ball_after_offset = ball_view[off:off + win_length]
+                # gaze_at_offset = np.ones_like(ball_after_offset) * gaze_view[off]
+
+                if phase_2:
+                    ball_after_offset = ball_view[off:off + win_length]
+                    gaze_at_offset = np.ones_like(ball_after_offset) * gaze_view[off] # gaze trajectory after the AL
+                    after_ofset_angle = np.min(np.linalg.norm(gaze_at_offset - ball_after_offset, axis=-1))
+
+                else:
+                    gaze_at_offset = gaze_view[off]
+                    ball_at_bounce = ball_view[phase_end-1] # ball position at the bounce event
+                    after_ofset_angle = np.linalg.norm(gaze_at_offset - ball_at_bounce, axis=-1)
+
                 pv = np.nanmax(vel_norm_gaze)
                 bgd = np.nanmean(computeVectorsDirection(gaze_view_s[1:] - gaze_view_s[0:1], ball_view_s[1:] - ball_view_s[0:1]))
                 if np.sum(np.isnan(ball_view_s)):
@@ -232,36 +243,55 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
 
 
 
-                if phase_2:
-                    on_event = ((phase_end - phase_start) - (on - phase_start))  * 10
-                    off_event = ((phase_end - phase_start) - (off - phase_start))  * 10
+                # if phase_2:
+                #     # on_event = ((phase_end - phase_start) - (on - phase_start))  * 10
+                #     # off_event = ((phase_end - phase_start) - (off - phase_start))  * 10
+                #
+                #     on_event = (phase_end - on) * 10
+                #     off_event = (phase_end - off)* 10
+                # else:
+                #     # on_event = (on - phase_start) * 10
+                #     # off_event = (off - phase_start) * 10
+                #     on_event = (phase_end - on) * 10
+                #     off_event = (phase_end - off) * 10
 
-                    # on_event = (on - phase_start) * 10
-                    # off_event = (off - phase_start)* 10
-                else:
-                    # on_event = (on - phase_start) * 10
-                    # off_event = (off - phase_start) * 10
-                    on_event = (phase_end - on) * 10
-                    off_event = (phase_end - off) * 10
-
-
+                on_event = (on - phase_start) * 10
+                off_event = (off - phase_start) * 10
                 # concatenate saccades features
                 try:
-                    features.append([
-                                     on_event,
-                                     off_event,
-                                     (off - on) * 10,
-                                     mda,
-                                     np.nanmean(after_ofset_angle),
-                                     np.nanmin(after_ofset_angle),
-                                     np.nanmax(after_ofset_angle),
-                                     mm,
-                                     sm,
-                                     gm,
-                                     pv,
-                                    bgd,
-                                    sdr,
-                                     ])
+                    if after_ofset_angle < 150:
+                        features.append([
+                                         on_event,
+                                         off_event,
+                                         (off - on) * 10,
+                                         mda,
+                                         after_ofset_angle,
+                                         after_ofset_angle,
+                                         after_ofset_angle,
+                                         mm,
+                                         sm,
+                                         gm,
+                                         pv,
+                                        bgd,
+                                        sdr,
+                                         ])
+                    else:
+                        features.append([
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                            np.nan,
+                        ])
+
                 except:
                     print("error")
 
@@ -279,7 +309,7 @@ def saccadeFeatures(onset_offset: np.array, gaze: np.array, ball: np.array, win_
     return features, al_cs
 
 
-def fixationSPFeatures(onset_offset_fsp:np.array, onset_offset_al_p2:np.array, gaze: np.array, ball: np.array,  phase_start=0, phase_end=100) -> np.array:
+def fixationSPFeatures(onset_offset_fsp:np.array, onset_offset_al_p2:np.array, gaze: np.array, ball: np.array,  phase_start=0, phase_end=100, phase2_start=0) -> np.array:
     '''
     Extract features of fsp that occurs immediately after AL in the P2
     :param onset_offset_fsp:
@@ -295,56 +325,159 @@ def fixationSPFeatures(onset_offset_fsp:np.array, onset_offset_al_p2:np.array, g
         features = []
         on, off = onset_offset_fsp[np.argwhere(idx)[0,0]]
 
-        _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze, swap=False)
-        _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
+        if (off - on) > 2:
+            _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze, swap=False)
+            _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
 
-        # when computing the angle between the gaze and the ball, both of them shuld be converted into visual field
-        gaze_view = np.vstack([gaze_az, gaze_elv]).transpose()
-        ball_view = np.vstack([ball_az, ball_elv]).transpose()
+            # when computing the angle between the gaze and the ball, both of them shuld be converted into visual field
+            gaze_view = np.vstack([gaze_az, gaze_elv]).transpose()
+            ball_view = np.vstack([ball_az, ball_elv]).transpose()
 
-        dist_angle = np.linalg.norm(gaze_view - ball_view, axis=-1)
+            dist_angle = np.linalg.norm(gaze_view - ball_view, axis=-1)
 
 
-        # compute the features
-        on_event = ((phase_end - phase_start) - (on - phase_start)) * 10
-        off_event = ((phase_end - phase_start) - (off - phase_start)) * 10
+            # compute the features
+            # on_event = ((phase_end - phase2_start) - (on - phase2_start)) * 10
+            # off_event = ((phase_end - phase2_start) - (off - phase2_start)) * 10
+            on_event = (on - phase2_start)  * 10
+            off_event = (off - phase2_start) * 10
 
-        # on_event = (phase_start - on) * 10
-        # off_event = (phase_start - off) * 10
+            #on_event = (phase_end - on) * 10
+            #off_event = (phase_end - off) * 10
 
-        mean_dist = np.nanmean(dist_angle[on:off])
-        min_dist = np.nanmin(dist_angle[on:off])
+            mean_dist = np.nanmean(dist_angle[on:off])
+            min_dist = np.nanmin(dist_angle[on:off])
 
-        std_dist = np.nanstd(dist_angle[on:off])
-        phase_dist = np.sqrt(np.average(np.square(dist_angle - mean_dist)))
+            std_dist = np.nanstd(dist_angle[on:off])
+            phase_dist = np.sqrt(np.average(np.square(dist_angle - mean_dist)))
 
-        vel_gaze_h, vel_norm_gaze_h, acc_gaze_h = computeVelAccV2(gaze[on:off], normalize=False)
-        vel_ball, vel_norm_ball, acc_ball = computeVelAccV2(ball[on:off], normalize=False)
 
-        gain =  vel_gaze_h / (vel_ball + 1e-15)
-        mean_gain = np.nanmean(gain)
-        std_gain = np.nanstd(gain)
 
-        features.append([
-            on_event,
-            off_event,
-            (off - on) * 10,
-            mean_dist,
-            min_dist,
-            std_dist,
-            phase_dist,
-            mean_gain,
-            std_gain
+            vel_gaze_h, vel_norm_gaze_h, acc_gaze_h = computeVelAccV2(gaze[on:off], normalize=False)
+            vel_ball, vel_norm_ball, acc_ball = computeVelAccV2(ball[on:off], normalize=False)
 
-        ])
+            gain =  vel_gaze_h / (vel_ball + 1e-15)
+            mean_gain = np.nanmean(gain)
+            std_gain = np.nanstd(gain)
 
-        features = np.asarray(features)
+            features.append([
+                on_event,
+                off_event,
+                (off - on) * 10,
+                mean_dist,
+                min_dist,
+                std_dist,
+                phase_dist,
+                mean_gain,
+                std_gain
 
-        return features
+            ])
+
+            features = np.asarray(features)
+
+            return features
+
+    sp_features = np.empty((1, 9))
+    sp_features[:] = np.nan
+    return sp_features
+
+
+
+
+
+def episodeFeatures(v: np.array) -> np.array:
+    # initialize output
+    # v = np.argwhere(v == 1)
+    output = []
+
+    if len(v) > 2:
+
+        # label groups of sample that belong to the same peak
+        valley_groups, num_groups = label(v)
+
+        for i in np.unique(valley_groups)[1:]:
+            point_group = np.argwhere(valley_groups == i)
+            output.append([np.min(point_group), np.max(point_group) + 1])
+
+    episodes =  np.array(output)
+    if len(episodes) > 0:
+        duration = episodes[:, 1] - episodes[:, 0]
+
+        avg_duration = np.average(duration)
+        min_duration = np.min(duration)
+        max_duration = np.max(duration)
+        percentage = np.average(v)
+        return avg_duration, min_duration, max_duration, percentage
     else:
-        sp_features = np.empty((1, 9))
-        sp_features[:] = np.nan
-        return sp_features
+
+        return 0, 0, 0, 0
+
+
+def convertToVisualFieldView(v) -> np.array:
+
+    _, az, elv = cartesianToSpher(vector=v, swap=False)
+    field_view = np.vstack([az, elv]).transpose()
+
+    return field_view
+
+
+def jointAttentionFeatures(g1, g2, ball1, ball2, th=10):
+    '''
+    :param g1: gaze view of subject 1
+    :param g2: gaze view of subject 2
+    :param ball1: ball view of subject 1
+    :param ball2: ball view of subject 2
+    :param th: threshold for joint attention
+    :return: features related to the duration of joint attention
+    '''
+
+    # gaze and ball view of subject 1
+    gaze_view_s1 = convertToVisualFieldView(g1)
+    ball_view_s1 = convertToVisualFieldView(ball1)
+
+
+    # gaze and ball view of subject 2
+    gaze_view_s2 = convertToVisualFieldView(g2)
+    ball_view_s2 = convertToVisualFieldView(ball2)
+
+    dist1 = np.linalg.norm(gaze_view_s1 - ball_view_s1, axis=-1)
+
+    dist2 = np.linalg.norm(gaze_view_s2 - ball_view_s2, axis=-1)
+
+
+    mask = (dist1 <= th) & (dist2 <= th)
+
+    joint_attention_features = episodeFeatures(mask)
+
+    return joint_attention_features
+
+
+def gazeMovemenSynctFeatures(g1:np.array, g2:np.array, ball1:np.array, ball2:np.array):
+    '''
+    :param g1: gaze vector (gaze in the head) of the first individual
+    :param g2: gaze vector of the second individual
+    :param ball1: ball in the head of the first individual
+    :param ball2: ball in the head of the second individual
+    :return:
+    '''
+    # gaze and ball view of subject 1
+    gaze_view_s1 = convertToVisualFieldView(g1)
+    ball_view_s1 = convertToVisualFieldView(ball1)
+
+
+    # gaze and ball view of subject 2
+    gaze_view_s2 = convertToVisualFieldView(g2)
+    ball_view_s2 = convertToVisualFieldView(ball2)
+
+    dist1 = np.linalg.norm(gaze_view_s1 - ball_view_s1, axis=-1)
+
+    dist2 = np.linalg.norm(gaze_view_s2 - ball_view_s2, axis=-1)
+
+
+    normalized_ed = computeNormalizedED(dist1, dist2) # normalized euclidian distance of the distance of the gaze in respect to the ball
+    normalized_cross = computeNormalizedCrossCorr(dist1, dist2)# normalized cross correlation distance of the distance of the gaze in respect to the ball
+
+    return
 
 def detectOnsetOffset(v: np.array, type="saccade") -> np.array:
     '''

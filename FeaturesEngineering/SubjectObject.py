@@ -20,6 +20,9 @@ class Ball:
         else:
             self.all_episodes = self.success_idx
 
+        # get trajectories
+        self.ball_t = self.smoothBall(ball["trajectories"].values)
+
 
 
     def smoothBall(self, ball: np.array) -> np.array:
@@ -34,10 +37,11 @@ class Ball:
 class Subject:
 
 
-    def __init__(self, sub: dict, tobii: dict,  racket: dict, ball:Ball):
+    def __init__(self, sub: dict, tobii: dict,  racket: dict, ball:Ball, hand="R"):
         # tobii reader
         self.tobii_reader = TobiiReader()
         self.ball = ball
+        self.hand = hand
 
         s = sub["segments"]
         r = racket["segments"]
@@ -114,3 +118,15 @@ class Subject:
             self.gaze_point[start:stop] = self.tobii_reader.gapFill(self.gaze_point[start:stop])
 
 
+
+class TableWall:
+
+    def __init__(self, table: dict, wall: dict):
+        # trajectories
+        self.wall_T = wall["trajectories"].values.reshape((-1, 4, 3))
+        self.table_T = table["trajectories"].values.reshape((-1, 4, 3))
+        table = np.nanmean(self.table_T, 0)
+        wall = np.nanmean(self.wall_T, 0)
+
+        self.wall_segment = np.nanmean(wall, axis=0, keepdims=True)
+        self.table_segment = np.nanmean(table, axis=0, keepdims=True)

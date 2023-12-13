@@ -107,5 +107,5 @@ y_episode_column = ["success"]
 excluded_subject = ["SE010C", "SE011A", "SE029C", "SE029A", "SE030B", "SE033A", "SE014B", "SE020B", "SE014A", "SE011C",
                     "SE018A", "SE017C"]
 
-RACKET_MASS = 142.20 # in gram
-BALL_MASS = 4.04 # in gram
+RACKET_MASS = (142.20 / 1000) # in KG
+BALL_MASS = (4.04 / 1000) # in gram

@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.spatial import ConvexHull
 from scipy.stats import gaussian_kde as kde, entropy
 from scipy.signal import welch
-
+from scipy import signal
 
 def whichShoulder(racket, r_wirst, l_wrist):
     r_r = np.linalg.norm(racket - r_wirst)
@@ -75,17 +75,18 @@ def computeHistBouce(ball: np.array, episodes: np.array):
     return np.vstack(wall_bounce), np.vstack(table_bounce)
 
 
-def computeVelAcc(v, speed_only=False, acc_only =False):
+def computeVelAcc(v, speed_only=False, acc_only =False,num_frames= 1):
     v1 = v[:-1]
     v2 = v[1:]
-    speed = np.linalg.norm(v2 - v1, axis=-1)
-    vel = np.sum(np.diff(v, n=1, axis=0), axis=-1)
+    speed = np.linalg.norm(v2 - v1, axis=-1) / num_frames
+    vel = np.nansum(np.diff(v, n=1, axis=0), axis=-1) / num_frames
     acc = np.diff(speed, n=1, axis=-1)
     if speed_only:
         return speed
     elif acc_only:
         return acc
     return speed, vel, acc
+
 
 
 def lyapunovExponent(v, emb_dim=10, matrix_dim=4):
@@ -165,6 +166,28 @@ def computeSkill(s, f):
     skill = n_s / (n_s + n_f)
 
     return skill
+
+
+def computeNormalizedED(v1, v2):
+    dist = 0.5 * np.square(np.std(v1 - v2)) / (np.square(np.std(v1)) + np.square(np.std(v2)))
+    return dist
+
+def computeNormalizedCrossCorr(v1, v2):
+    v1_norm = (v1 - np.mean(v1)) / (np.std(v1))
+    v2_norm = (v2 - np.mean(v2)) / (np.std(v2))
+    cross_corr = signal.correlate(v1_norm, v2_norm, mode="full", method="direct") / len(v1_norm)
+    lags = signal.correlation_lags(len(v1_norm), len(v2_norm))
+
+    print(np.max(cross_corr))
+    print(lags[np.argmax(cross_corr)])
+
+    import matplotlib.pyplot as plt
+    plt.plot(v1)
+    plt.plot(v2)
+    # plt.plot(lags, cross_corr)
+    plt.show()
+
+    return np.max(cross_corr), lags[np.argmax(cross_corr)]
 
 def computeScore(s, f, max_time=360., ball_trajetories=None, wall_trajectories=None):
     wall_x_min, wall_x_max = np.nanmin(wall_trajectories.filter(regex='_X').values), np.nanmax(

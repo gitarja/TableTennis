@@ -13,7 +13,7 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 from Config.Episodes import EpisodesParamsSingle, EpisodesParamsDouble
 import pickle
-from BallProcessing import BallProcessing
+from DataPipeLine.BallProcessing import BallProcessing
 class SingleBallCleaning(BallProcessing):
 
 
