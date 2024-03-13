@@ -9,24 +9,25 @@ single_df = ref_df.loc[ref_df.Trial_Type == "S"]
 double_df = ref_df.loc[ref_df.Trial_Type == "P"]
 double_df_unique = double_df.loc[double_df.Session_Code.drop_duplicates().index]
 
-for i, d in single_df.iterrows():
+for i, d in double_df_unique.iterrows():
     dates = d["Date"].replace(".", "-")
     session = d["Session"]
     trial = d["Trial"]
 
     folder_name = dates + "_" + session
     file_name = folder_name + "_" + trial
+    # if file_name == "2022-11-08_A_T02":
 
     file_session_path = result_path + folder_name + "\\"
 
     # clean data
     reader = SubjectObjectReader()
-    obj, sub  = reader.extractData(file_session_path+ file_name+ ".pkl")
+    obj, sub = reader.extractData(file_session_path + file_name + ".pkl")
 
     # complete data
 
     reader_comp = SubjectObjectReader()
-    obj_comp, sub_comp, ball_comp, tobii_comp  = reader_comp.extractData(file_session_path+ file_name+"_complete.pkl")
+    obj_comp, sub_comp, ball_comp, tobii_comp = reader_comp.extractData(file_session_path + file_name + "_complete.pkl")
 
     reader_ball = SubjectObjectReader()
     _, _, ball_clean = reader_ball.extractData(file_session_path + file_name + "_wb.pkl")
@@ -34,10 +35,10 @@ for i, d in single_df.iterrows():
     data = [obj, sub, ball_comp, tobii_comp]
 
     with open(
-            file_session_path  + file_name + "_complete_final.pkl",
+            file_session_path + file_name + "_complete_final.pkl",
             'wb') as f:
         pickle.dump(data, f)
-    print(file_session_path+ file_name+ ".pkl")
+    print(file_session_path + file_name + ".pkl")
 
 # result_path = "F:\\users\\prasetia\\data\\TableTennis\\Experiment_1_cooperation\\cleaned\\2022-12-08_A\\"
 #

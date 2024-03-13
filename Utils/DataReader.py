@@ -70,15 +70,20 @@ class TobiiReader:
         return self.local2GlobalGaze(gaze, tobii_seg, tobii_rot, translation=translation)
 
     def local2GlobalGaze(self, gaze, tobii_seg, tobii_rot, translation=True):
+        '''
+        convert gaze from local coordinate (Tobii) to global coordinate (Vicon)
+        :param gaze: gaze vector from Tobii
+        :param tobii_seg: tobii segment from Vicon
+        :param tobii_rot: tobii segment rotation from Vicon
+        :param translation: whether to perform translation or not
+        :return: gaze vector in local coordinate
 
-        # R_x = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
-        # R_x2 = np.array([np.squeeze(R.from_euler("zx", [180, 270], degrees=True).as_matrix()) for r in tobii_rot])
-        # gaze = np.squeeze(np.matmul(R_x, np.expand_dims(gaze, 2)))
+        gaze_global = (R * gaze_local) + tobii_segment
+        '''
 
         R_m = np.array([R.from_rotvec(r, degrees=True).as_matrix() for r in tobii_rot])
 
         gaze_global = np.squeeze(np.matmul(R_m, np.expand_dims(gaze, 2)))
-        # gaze_global = np.squeeze(np.matmul(R_x2, np.expand_dims(gaze_global, 2)))
         if translation:
             gaze_global = gaze_global + tobii_seg
 
@@ -416,7 +421,7 @@ class ViconReader:
 
     def getIndexOf(self, arr: list, obj_name: str):
 
-        return [i for i, x in enumerate(arr) if obj_name in x], [x for i, x in enumerate(arr) if obj_name in x]
+        return [i for i, x in enumerate(arr) if obj_name + ":" in x], [x for i, x in enumerate(arr) if obj_name + ":" in x]
 
     def extractData(self, file_path: str = None, cleaning=False):
         with open(file_path, mode='r', encoding='utf-8-sig') as file:

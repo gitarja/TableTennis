@@ -243,17 +243,20 @@ class Ui_MainWindow(QMainWindow):
         wall_data =  np.array(wall_data).reshape((-1, 3))
         table_data = np.array(table_data).reshape((-1, 3))
         racket1_data = np.array(racket1_data).reshape((-1, 3))
-        racket2_data = np.array(racket2_data).reshape((-1, 3))
+
 
         wall = wall_data[[0,2,2,1,1,3,3,0]]
         table = table_data[[0,2,2,1,1,3,3,0]]
         racket1 = racket1_data[[0,2,2,1,1,3,3,0]]
-        racket2 = racket2_data[[0,2,2,1,1,3,3,0]]
+
 
         self.wall_line.setData(pos=wall, width=1.5)
         self.table_line.setData(pos=table, width=1.5)
         self.racket1_line.setData(pos=racket1, width=1.5)
-        self.racket2_line.setData(pos=racket2, width=1.5)
+        if racket2_data is not None:
+            racket2_data = np.array(racket2_data).reshape((-1, 3))
+            racket2 = racket2_data[[0, 2, 2, 1, 1, 3, 3, 0]]
+            self.racket2_line.setData(pos=racket2, width=1.5)
 
     def updateBallArea(self, data):
         bot_idx_line = [0, 1, 1, 3, 3, 2, 2, 0]

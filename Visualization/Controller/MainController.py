@@ -41,9 +41,9 @@ class Feeder(QtCore.QThread):
         self.wall = None
         self.table = None
         for obj in obj_data:
-            if (obj["name"] == 'Racket1') | (obj["name"] == 'Racket1a'):
+            if (obj["name"] == 'Racket1'):
                 self.racket_1 = obj
-            elif obj["name"] == 'Racket2':
+            elif (obj["name"] == 'Racket2') | (obj["name"] == 'Racket1a'):
                 self.racket_2 = obj
             elif obj["name"] == 'Wall':
                 self.wall_mean = np.nanmean(obj["trajectories"], 0)
@@ -95,8 +95,8 @@ class Feeder(QtCore.QThread):
         # self.human_segments = [vicon_reader.constructSegments(d["segments"], vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
         # self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"]) for d in self.sub_data]
 
-        self.human_segments = [vicon_reader.constructSegments(d["segments"], vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
-        self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"]) for d in self.sub_data]
+        self.human_segments = [vicon_reader.constructSegments(d["segments"].values, vicon_reader.SEGMENTS_PAIR, vicon_reader.SEGMENTS_IDX) for d in self.sub_data]
+        self.segments_rot = [vicon_reader.getSegmentsRot(d["segments"].values) for d in self.sub_data]
 
 
     def run(self):
@@ -115,50 +115,55 @@ class Feeder(QtCore.QThread):
 
 
     def sendData(self):
-        human_trajectories = [d["trajectories"][self.idx_nexus, :123] / 100 for d in self.sub_data]
+        human_trajectories = [d["trajectories"].values[self.idx_nexus, :123] / 100 for d in self.sub_data]
         human_segments = [s[self.idx_nexus] / 100 for s in self.human_segments]
         wall_trajectories = self.wall_mean / 100
         table_trajectories = self.table_mean/ 100
-        racket1_trajectories = self.racket_1["trajectories"][self.idx_nexus]/ 100
-        racket2_trajectories = self.racket_2["trajectories"][self.idx_nexus]/ 100
+        racket1_trajectories = self.racket_1["trajectories"].values[self.idx_nexus]/ 100
+
+
         ball_trajectories = self.ball_data[self.idx_nexus] / 100
         ball_area_trajectories = self.ball_area / 100
         self.human_trajectories_points.emit([human_trajectories, human_segments])
+        if self.racket_2 is not None:
+            racket2_trajectories = self.racket_2["trajectories"].values[self.idx_nexus] / 100
+        else:
+            racket2_trajectories = None
         self.object_trajectories_points.emit([wall_trajectories, table_trajectories, racket1_trajectories, racket2_trajectories])
 
-        print(self.idx_nexus)
+        # print(self.idx_nexus)
 
-        self.ball_trajectories_points.emit(ball_trajectories[1:].tolist())
+        self.ball_trajectories_points.emit(ball_trajectories.tolist())
         # self.ballarea_trajectories_points.emit(ball_area_trajectories.tolist())
 
-        if self.idx_nexus % 100 == 0:
-            if self.idx_ecg < len(self.ecg_data):
-                rr = self.ecg_data.iloc[self.idx_ecg]["RR"]
-                rr_points = rr if len(rr) > 1 else [rr]
-                self.ecg_points.emit(rr_points)
-                self.idx_value.emit(self.idx_ecg)
-                self.idx_ecg += 1
-
-        if self.idx_nexus % 2 == 0:
-            if self.idx_tobii < len(self.tobii_data):
+        # if self.idx_nexus % 100 == 0:
+        #     if self.idx_ecg < len(self.ecg_data):
+        #         rr = self.ecg_data.iloc[self.idx_ecg]["RR"]
+        #         rr_points = rr if len(rr) > 1 else [rr]
+        #         self.ecg_points.emit(rr_points)
+        #         self.idx_value.emit(self.idx_ecg)
+        #         self.idx_ecg += 1
 
 
-                tobii_segments = np.array([h[15] for h in human_segments])  # 15 is the index of tobii segment
-                # print(tobii_segments)
-                # gaze_inf = np.array([np.array(g)[2:17] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
-                gaze_inf = np.array([np.array(g)[2:11] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
-                # tobii_rot = np.array([np.array(h) for h in self.tobii_data.iloc[self.idx_tobii]["Head"]])
-                tobii_rot = np.array([r[self.idx_nexus][-1] for r in self.segments_rot])
 
-                gaze = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 0:3], tobii_segments, tobii_rot)
-                print(gaze)
-                eye_left = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 3:6], tobii_segments, tobii_rot)
-                eye_right = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 6:9], tobii_segments, tobii_rot)
 
-                self.gaze_points.emit(
+        tobii_segments = np.array([h[15] for h in human_segments])  # 15 is the index of tobii segment
+        # print(tobii_segments)
+        # gaze_inf = np.array([np.array(g)[2:17] / 100 for g in self.tobii_data.iloc[self.idx_tobii]["Gaze"]])
+        gaze_inf = np.array([np.array(g[self.idx_nexus]) / 100 for g in self.tobii_data])
+        # tobii_rot = np.array([np.array(h) for h in self.tobii_data.iloc[self.idx_tobii]["Head"]])
+        tobii_rot = np.array([r[self.idx_nexus][-1] for r in self.segments_rot])
+
+        gaze = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 0:3], tobii_segments, tobii_rot)
+
+        eye_left = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 3:6], tobii_segments, tobii_rot)
+        # print(eye_left)
+        eye_right = self.tobii_reader.local2GlobalGaze(gaze_inf[:, 6:9], tobii_segments, tobii_rot)
+        # print(eye_right)
+        self.gaze_points.emit(
                     [np.array(gaze).tolist(), np.array(eye_left).tolist(), np.array(eye_right).tolist()])
-                # self.gaze_points.emit((np.array(gaze) + np.array(tobii_segments)).tolist())
-                self.idx_tobii += 1
+        # self.gaze_points.emit((np.array(gaze) + np.array(tobii_segments)).tolist())
+        self.idx_tobii += 1
 
     def setIndex(self, idx):
         self.idx_ecg = idx
@@ -185,11 +190,12 @@ class MainController:
         self.feeder.idx_value.connect(self.view.updateECG)
 
         # Reader
-        self.vicon_reader = ViconReader()
-        self.obj_reader = SubjectObjectReader()
-        self.tobii_reader = TobiiReader()
-        self.ecg_reader = ECGReader()
-        self.ball_reader = BallReader()
+        # self.vicon_reader = ViconReader()
+        # self.obj_reader = SubjectObjectReader()
+        # self.tobii_reader = TobiiReader()
+        # self.ecg_reader = ECGReader()
+        # self.ball_reader = BallReader()
+        self.reader = SubjectObjectReader()
         # self.c3d_reader = C3dReader()
 
         # menu action
@@ -239,49 +245,55 @@ class MainController:
 
 
     def openTrial(self, path):
-        nexus_file = glob.glob(path + "\\*_Nexus.pkl")
-        ecg_file = glob.glob(path + "\\*_ECG.csv")
-        tobii_file = glob.glob(path + "\\*_Tobii.tsv")
-        ball_file = glob.glob(path + "\\*_ball.csv")
+        all_file = glob.glob(path + "\\*_complete_final.pkl")
+        # nexus_file = glob.glob(path + "\\*_Nexus.pkl")
+        # ecg_file = glob.glob(path + "\\*_ECG.csv")
+        # tobii_file = glob.glob(path + "\\*_Tobii.tsv")
+        # ball_file = glob.glob(path + "\\*_ball.csv")
+        #
+        # if len(ball_file) < 1:
+        #     showErrorMessage("Ball file is not found")
+        #     return
+        # if len(nexus_file)< 1:
+        #     showErrorMessage("Nexus file is not found")
+        #     return
+        # else:
+        #     # obj, sub = self.vicon_reader.extractData(nexus_file[0])
+        #     obj, sub = self.obj_reader.extractData(nexus_file[0])
+        #     n_sub = len(sub)
+        #     if len(ecg_file) != n_sub:
+        #         showErrorMessage("Number of ECG files not match with the number of subjects")
+        #         return
+        #     if len(tobii_file) != n_sub:
+        #         showErrorMessage("Number of Tobii files not match with the number of subjects")
+        #         return
+        #
+        #     # read ECG and Tobii
+        #     ecg_files = []
+        #     tobii_files = []
+        #     for s in sub:
+        #         ecg_files.append(path + "\\"+s["name"]+"_ECG.csv")
+        #         tobii_files.append(path+ "\\"+s["name"]+"_Tobii.tsv")
+        #
+        #     ecg_data = self.ecg_reader.extractData(ecg_files)
+        #     tobii_data = self.tobii_reader.extractData(tobii_files)
+        #     ball_data = self.ball_reader.extractData(ball_file[0])
+        #     self.view.setECGPlot(n_sub, np.array(ecg_data["RR"].values.tolist()).T)
 
-        if len(ball_file) < 1:
-            showErrorMessage("Ball file is not found")
-            return
-        if len(nexus_file)< 1:
-            showErrorMessage("Nexus file is not found")
-            return
-        else:
-            # obj, sub = self.vicon_reader.extractData(nexus_file[0])
-            obj, sub = self.obj_reader.extractData(nexus_file[0])
-            n_sub = len(sub)
-            if len(ecg_file) != n_sub:
-                showErrorMessage("Number of ECG files not match with the number of subjects")
-                return
-            if len(tobii_file) != n_sub:
-                showErrorMessage("Number of Tobii files not match with the number of subjects")
-                return
-
-            # read ECG and Tobii
-            ecg_files = []
-            tobii_files = []
-            for s in sub:
-                ecg_files.append(path + "\\"+s["name"]+"_ECG.csv")
-                tobii_files.append(path+ "\\"+s["name"]+"_Tobii.tsv")
-
-            ecg_data = self.ecg_reader.extractData(ecg_files)
-            tobii_data = self.tobii_reader.extractData(tobii_files)
-            ball_data = self.ball_reader.extractData(ball_file[0])
-            self.view.setECGPlot(n_sub, np.array(ecg_data["RR"].values.tolist()).T)
-
-            # Activate play button and slider
-            self.view.play_button.setEnabled(True)
-            self.view.frame_slider.setEnabled(True)
-            self.view.frame_slider.setValue(0)
-            self.view.frame_slider.setRange(0, len(ecg_data))
-            # Feeder
-            # there is a 20 ms delay before the UDP is triggered
-            self.feeder.setData(sub, obj, ecg_data, tobii_data, ball_data)
-            self.feeder.start()
+        obj, sub, ball, tobii = self.reader.extractData(all_file[0])
+        ball_data = ball[0]["trajectories"].values
+        # tobii_data = [tobii[0]["trajectories"].values[:, [3,4,5,12,13,14,15,16,17]], tobii[1]["trajectories"].values[:, [3,4,5,12,13,14,15,16,17]]]
+        tobii_data = [tobii[0]["trajectories"].values[:, [3,4,5,12,13,14,15,16,17]]]
+        ecg_data = np.ones((2, len(ball_data)))
+        # Activate play button and slider
+        self.view.play_button.setEnabled(True)
+        self.view.frame_slider.setEnabled(True)
+        self.view.frame_slider.setValue(0)
+        # self.view.frame_slider.setRange(0, len(ecg_data))
+        # # Feeder
+        # # there is a 20 ms delay before the UDP is triggered
+        self.feeder.setData(sub, obj, ecg_data, tobii_data, ball_data)
+        self.feeder.start()
 
     def run(self):
         self.view.show()

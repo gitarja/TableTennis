@@ -11,6 +11,27 @@ import os
 from scipy.signal import butter, lfilter
 
 
+def computePowerSpectrum(x, fs=100):
+    dt = 1 / fs
+    T = len(x) * dt
+    xf = np.fft.fft(x - x.mean())  # Compute Fourier transform of x
+    Sxx = 2 * dt ** 2 / T * (xf * xf.conj())  # Compute spectrum
+    Sxx = Sxx[:int(len(x) / 2)+1]  # Ignore negative frequencies
+    p = Sxx.real
+
+    f = np.fft.rfftfreq(len(x), d=1. / fs)
+
+    return f, p
+def relativeDifference(v1, v2):
+    dem = np.max(np.vstack([np.abs(v1), np.abs(v2)]).T, axis=-1)
+    dist = np.abs(v1 - v2) / dem
+    return dist
+
+def percentageChange(v1, v2):
+    dist = (v2 - v1) / np.abs(v1)
+
+    return dist
+
 def fit180(deg):
 
     x = deg % 360

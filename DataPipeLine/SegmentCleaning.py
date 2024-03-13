@@ -121,7 +121,7 @@ if __name__ == '__main__':
     double_df = ref_df.loc[ref_df.Trial_Type == "P"]
     double_df_unique = double_df.loc[double_df.Session_Code.drop_duplicates().index]
 
-    for i, d in single_df.iterrows():
+    for i, d in double_df.iterrows():
         dates = d["Date"].replace(".", "-")
         session = d["Session"]
         trial = d["Trial"]
@@ -129,64 +129,64 @@ if __name__ == '__main__':
         folder_name = dates + "_" + session
         file_name = folder_name + "_" + trial
 
-        if file_name == "2022-12-08_A_T06":
-            print(file_name)
-            file_session_path = file_path + folder_name + "\\"
-            result_session_path = result_path + folder_name + "\\"
+        # if file_name == "2022-11-21_A_T01B":
+        print(file_name)
+        file_session_path = file_path + folder_name + "\\"
+        result_session_path = result_path + folder_name + "\\"
 
-            checkMakeDir(result_session_path)
-            reader = ViconReader()
-            obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
-            cleaner = SegmentsCleaner()
+        checkMakeDir(result_session_path)
+        reader = ViconReader()
+        obj, sub, n = reader.extractData(file_session_path + file_name + ".csv", cleaning=True)
+        cleaner = SegmentsCleaner()
 
-            # try:
-            for s in sub:
-                # tobii cleaning
-                tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
-                tobii_trajectories = s["trajectories"].filter(regex='Tobii').values
-                tobii_cs = np.copy(tobii_segment)
-                tobii_ct = np.copy(tobii_trajectories)
-                new_tobii_segment, tobii_cleaned_p = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
-                # s["segments"].filter(regex='TobiiGlass_T').loc[:] = new_tobii_segment
-                s["segments"].loc[:, s["segments"].filter(regex='TobiiGlass_T').columns] = new_tobii_segment
-                # right wirst cleaning
-                rwrist_segment = s["segments"].filter(regex='R_Wrist_T').values
-                rwrist_trajectories = s["trajectories"].filter(regex='(RWRA|RWRB)').values
-                rwrist_cs = np.copy(rwrist_segment)
-                rwrist_ct = np.copy(rwrist_trajectories)
-                new_rwrist_segment, rwirst_cleaned_p = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
-                # s["segments"].filter(regex='R_Wrist_T').loc[:] = new_rwrist_segment
-                s["segments"].loc[:, s["segments"].filter(regex='R_Wrist_T').columns] = new_rwrist_segment
-                # left wirst cleaning
+        # try:
+        for s in sub:
+            # tobii cleaning
+            tobii_segment = s["segments"].filter(regex='TobiiGlass_T').values
+            tobii_trajectories = s["trajectories"].filter(regex='Tobii').values
+            tobii_cs = np.copy(tobii_segment)
+            tobii_ct = np.copy(tobii_trajectories)
+            new_tobii_segment, tobii_cleaned_p = cleaner.tobiiCleanData(tobii_cs, tobii_ct, th=291)
+            # s["segments"].filter(regex='TobiiGlass_T').loc[:] = new_tobii_segment
+            s["segments"].loc[:, s["segments"].filter(regex='TobiiGlass_T').columns] = new_tobii_segment
+            # right wirst cleaning
+            rwrist_segment = s["segments"].filter(regex='R_Wrist_T').values
+            rwrist_trajectories = s["trajectories"].filter(regex='(RWRA|RWRB)').values
+            rwrist_cs = np.copy(rwrist_segment)
+            rwrist_ct = np.copy(rwrist_trajectories)
+            new_rwrist_segment, rwirst_cleaned_p = cleaner.wristCleaning(rwrist_cs, rwrist_ct)
+            # s["segments"].filter(regex='R_Wrist_T').loc[:] = new_rwrist_segment
+            s["segments"].loc[:, s["segments"].filter(regex='R_Wrist_T').columns] = new_rwrist_segment
+            # left wirst cleaning
 
-                lwrist_segment = s["segments"].filter(regex='L_Wrist_T').values
-                lwrist_trajectories = s["trajectories"].filter(regex='(LWRA|LWRB)').values
-                lwrist_cs = np.copy(lwrist_segment)
-                lwrist_ct = np.copy(lwrist_trajectories)
-                new_lwrist_segment, lwirst_cleaned_p = cleaner.wristCleaning(lwrist_cs, lwrist_ct)
-                # s["segments"].filter(regex='L_Wrist_T').loc[:] = new_lwrist_segment
-                s["segments"].loc[:, s["segments"].filter(regex='L_Wrist_T').columns] = new_lwrist_segment
-                print(
-                    "%s, %s, %f, %f, %f" % (file_name, s["name"], tobii_cleaned_p, rwirst_cleaned_p, lwirst_cleaned_p))
-                # racket cleaning
-            for o in obj:
-                if "Racket" in o["name"]:
-                    racket_segment = o["segments"].filter(regex='pt_T').values
-                    racket_trajectories = o["trajectories"].filter(regex='(pt1|pt4)').values
-                    racket_cs = np.copy(racket_segment)
-                    racket_ct = np.copy(racket_trajectories)
-                    new_racket_segment, racket_cleaned_p = cleaner.racketCleaning(racket_cs, racket_ct, th=350)
-                    # o["segments"].filter(regex='pt_T').loc[:] = new_racket_segment
-                    o["segments"].loc[:, o["segments"].filter(regex='pt_T').columns] = new_racket_segment
-                    print(
-                        "%s, %s, %f" % (file_name, o["name"], racket_cleaned_p))
+            lwrist_segment = s["segments"].filter(regex='L_Wrist_T').values
+            lwrist_trajectories = s["trajectories"].filter(regex='(LWRA|LWRB)').values
+            lwrist_cs = np.copy(lwrist_segment)
+            lwrist_ct = np.copy(lwrist_trajectories)
+            new_lwrist_segment, lwirst_cleaned_p = cleaner.wristCleaning(lwrist_cs, lwrist_ct)
+            # s["segments"].filter(regex='L_Wrist_T').loc[:] = new_lwrist_segment
+            s["segments"].loc[:, s["segments"].filter(regex='L_Wrist_T').columns] = new_lwrist_segment
+            print(
+                "%s, %s, %f, %f, %f" % (file_name, s["name"], tobii_cleaned_p, rwirst_cleaned_p, lwirst_cleaned_p))
+            # racket cleaning
+        for o in obj:
+            if "Racket" in o["name"]:
+                racket_segment = o["segments"].filter(regex='pt_T').values
+                racket_trajectories = o["trajectories"].filter(regex='(pt1|pt4)').values
+                racket_cs = np.copy(racket_segment)
+                racket_ct = np.copy(racket_trajectories)
+                new_racket_segment, racket_cleaned_p = cleaner.racketCleaning(racket_cs, racket_ct, th=350)
+                # o["segments"].filter(regex='pt_T').loc[:] = new_racket_segment
+                o["segments"].loc[:, o["segments"].filter(regex='pt_T').columns] = new_racket_segment
+                # print(
+                #     "%s, %s, %f" % (file_name, o["name"], racket_cleaned_p))
 
-            import pickle
+        import pickle
 
-            data = [obj, sub]
+        data = [obj, sub]
 
-            with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
-                pickle.dump(data, f)
+        with open(result_session_path + "\\" + file_name + ".pkl", 'wb') as f:
+            pickle.dump(data, f)
 
 # except:
 #     print("Error: " + file_name)

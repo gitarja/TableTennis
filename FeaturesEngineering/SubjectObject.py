@@ -60,7 +60,9 @@ class Subject:
         self.right_gaze_dir = tobii.filter(regex='Gaze_direction_right').values
 
         # ----------------------------------body-----------------------------
-        self.root_segment_T = s.filter(regex='Root_T').values
+
+        #
+        self.lower_back_segment_T =  s.filter(regex='LowerBack_T').values
         # wrist
         self.rwirst_segment_T = s.filter(regex='R_Wrist_T').values
         self.lwirst_segment_T = s.filter(regex='L_Wrist_T').values
@@ -87,10 +89,6 @@ class Subject:
 
         self.rhummer_segment_T = s.filter(regex='R_Humerus_T').values
         self.relbow_segment_T = s.filter(regex='R_Elbow_T').values
-
-        self.racket_segment_T = r.filter(regex='pt_T').values
-        self.racket_segment_R = r.filter(regex='pt_R').values
-        self.racket_p3_T = r_tj.filter(regex='pt3_').values
 
         self.tobii_segment_T = s.filter(regex='TobiiGlass_T').values
         self.tobii_segment_R = s.filter(regex='TobiiGlass_R').values
@@ -129,4 +127,6 @@ class TableWall:
         wall = np.nanmean(self.wall_T, 0)
 
         self.wall_segment = np.nanmean(wall, axis=0, keepdims=True)
+        self.wall_bottom = np.expand_dims((wall[0] + wall[3]) / 2, axis=0)
+        self.wall_top = np.expand_dims((wall[1] + wall[2]) / 2, axis=0)
         self.table_segment = np.nanmean(table, axis=0, keepdims=True)
