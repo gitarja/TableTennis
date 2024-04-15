@@ -27,7 +27,7 @@ def detectGazeEvent( gaze: np.array, ball: np.array, tobii: np.array):
 
     return onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label
 
-def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.array):
+def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.array, th_pursuit:float=10):
     '''
     :param gaze: gaze in the world
     :param ball: ball in head vector
@@ -92,7 +92,7 @@ def detectSaccade(gaze: np.array, ball: np.array, tobii:np.array,  tobii_avg:np.
     ball_gaze_dist = np.linalg.norm(gaze_view - ball_view, axis=-1)
     # labels_sp[(ball_gaze_dist<=15) & ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 2.0))] = 1  # pursuit gain
     # setting the dist to 5 will reduce the number of smooth pursuit, better to use 10
-    labels_sp[((ball_gaze_dist<=10) | ((vel_gaze_h >30) & (vel_ratio >= 0.3) & (vel_ratio <= 1.2)))] = 1  # pursuit gain
+    labels_sp[((ball_gaze_dist<=th_pursuit) | ((vel_gaze_h >30) & ((vel_ratio >= 0.3) & (vel_ratio <= 1.2))))] = 1  # pursuit gain
     labels_sp[labels_saccade==1] = 0
     onset_offset_sp = detectOnsetOffset(labels_sp == 1, type="sp")
     onset_offset_sp = groupPursuit(onset_offset_sp)
@@ -401,7 +401,7 @@ def jointAttentionFeatures(g1, g2, ball1, ball2, th=10):
 
     mask = (dist1 <= th) & (dist2 <= th)
 
-    joint_attention_features = episodeFeatures(mask, min_episode=5)
+    joint_attention_features = episodeFeatures(mask, min_episode=5)[-1]
 
 
 
@@ -642,7 +642,7 @@ def groupPursuit(onset_offset:np.array) -> np.array:
             new_onset_offset.append([onset, offset])
 
         new_onset_offset = np.asarray(new_onset_offset).astype(int)
-        # clean sp less than 100 ms
+        # clean sp less than 50 ms
         for i in range(len(new_onset_offset)):
             on, off = new_onset_offset[i]
             if (off - on) < 5:

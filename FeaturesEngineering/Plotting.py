@@ -5,33 +5,32 @@ from Utils.Lib import cartesianToSpher
 
 def gazeEventsPlotting(gaze, tobii_avg, ball, onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label, al_cs_labels):
     _, gaze_az, gaze_elv = cartesianToSpher(vector=gaze - tobii_avg, swap=False)
-    _, ball_az, ball_elv = cartesianToSpher(vector=ball, swap=False)
+    _, ball_az, ball_elv = cartesianToSpher(vector=ball - tobii_avg, swap=False)
     gaze_plot = np.vstack([gaze_az, gaze_elv]).transpose()
     ball_plot = np.vstack([ball_az, ball_elv]).transpose()
     x = gaze_plot[:, 0]
     y = gaze_plot[:, 1]
-    x_ball = ball_plot[:, 0]
-    y_ball = ball_plot[:, 1]
+    x_ball = ball_plot[:-10, 0]
+    y_ball = ball_plot[:-10, 1]
 
     plt.plot(x, y, linestyle="--", color="#525252")
 
     plt.quiver(x[:-1], y[:-1], x[1:] - x[:-1], y[1:] - y[:-1], scale_units='xy', angles='xy', scale=1.5, width=0.002, ls="dashed", color="#525252")
 
-    # plt.plot(x_ball, y_ball, "-*")
-    # plt.quiver(x_ball[:-1], y_ball[:-1], x_ball[1:] - x_ball[:-1], y_ball[1:] - y_ball[:-1], scale_units='xy',
-    #            angles='xy', scale=2,
-    #            width=0.002)
+    plt.plot(x_ball, y_ball, linestyle="--", color="#000000")
+    plt.quiver(x_ball[:-1], y_ball[:-1], x_ball[1:] - x_ball[:-1], y_ball[1:] - y_ball[:-1], scale_units='xy',
+               angles='xy', scale=2., width=0.002, ls="dashed", color="#000000")
 
     for on, off in onset_offset_sp:
         plt.scatter(x[on:off + 1], y[on:off + 1], color="#4daf4a", zorder=2, marker="o", s=10)
 
     for on, off in onset_offset_fix:
-        plt.scatter(x[on:off + 1], y[on:off + 1], color="#377eb8", zorder=3, s=10)
+        plt.scatter(x[on:off + 1], y[on:off + 1], color="#636363", zorder=3, s=10)
 
     for on_off, al in zip(onset_offset_saccade, al_cs_labels):
         on, off = on_off
         if al == 0:
-            plt.scatter(x[on:off + 1], y[on:off + 1], color="#377eb8", zorder=4)
+            plt.scatter(x[on:off + 1], y[on:off + 1], color="#636363", zorder=4)
 
         elif al == 1:
             stream_label[on:off] = 4
@@ -41,6 +40,8 @@ def gazeEventsPlotting(gaze, tobii_avg, ball, onset_offset_saccade, onset_offset
             plt.scatter(x[on:off + 1], y[on:off + 1], color="#ff7f00", zorder=4)
     # print(len(x))
     # plt.savefig("F:\\users\\prasetia\\projects\\Animations\\TableTennis\\events.eps", format='eps')
+    plt.xlim(-47, -9)
+    plt.ylim(-53, -8)
     plt.show()
 
     # fig = plt.figure()

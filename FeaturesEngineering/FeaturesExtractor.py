@@ -29,7 +29,7 @@ class FeaturesExtractor:
         self.b = ball
         self.tw = table_wall
 
-    def detectGazeEvents(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True, fill_in=False) -> dict:
+    def detectGazeEvents(self, episode, th_al_p1=10, th_al_p2=25, th_angle_p=15, normalize=True, fill_in=False, iam_idx=0, double=False) -> dict:
         '''
         Detect the onset and offset of saccade and pursuit in 3 phases
         p1 = hit1 -> bounce wall
@@ -79,7 +79,7 @@ class FeaturesExtractor:
         # attended fixation and sp features
         fsp_phase3_list = np.empty(shape=(len(episode), 3))
 
-
+        th_pursuit = 10 # default of pursuit threshold
         if fill_in:
             anticipation_phase1_list[:] = 0
             anticipation_phase2_list[:] = 0
@@ -125,8 +125,14 @@ class FeaturesExtractor:
             tobii = np.array([movingAverage(self.p.tobii_segment_T[p1_s:p3_e, i], n=1) for i in range(3)]).transpose()
             tobii_avg = np.array(
                 [movingAverage(self.p.tobii_segment_T[p1_s:p3_e, i], n=3) for i in range(3)]).transpose()
+
+
+            # if double:
+            #     if se[6] != iam_idx:
+            #         th_pursuit = 15 # if i am not the receiver, decerease the threshold
+
             onset_offset_saccade, onset_offset_sp, onset_offset_fix, stream_label = detectSaccade(gaze, ball, tobii,
-                                                                                                  tobii_avg)
+                                                                                                  tobii_avg, th_pursuit=th_pursuit)
 
             # normalize gaze and ball
             gaze_ih = gaze - tobii_avg
@@ -312,7 +318,7 @@ class FeaturesExtractor:
 
 
 
-    def detectJointAttention(self, episode, s2, b, th=20, fill_in=False):
+    def detectJointAttention(self, episode, s2, b, th=10, fill_in=False):
         '''
         :param episode: list of episode
         :param s2: compared subject
@@ -322,15 +328,15 @@ class FeaturesExtractor:
         '''
 
         # saccades features
-        joint_attention_list_p23 = np.empty(shape=(len(episode), 4))
+        joint_attention_list = np.empty(shape=(len(episode), 1))
 
 
 
         if fill_in:
-            joint_attention_list_p23[:] = 0
+            joint_attention_list[:] = 0
 
         else:
-            joint_attention_list_p23[:] = np.nan
+            joint_attention_list[:] = np.nan
 
 
         ball_n = b.ball_t
@@ -391,7 +397,7 @@ class FeaturesExtractor:
 
 
             # joint attention P1
-            joint_attention_feature_p23 = jointAttentionFeatures(gaze_ih_s1[p2s:p3e + 1], gaze_ih_s2[p2s:p3e + 1],
+            joint_attention_feature = jointAttentionFeatures(gaze_ih_s1[p2s:p3e + 1], gaze_ih_s2[p2s:p3e + 1],
                                                                 ball_ih_s1[p2s:p3e + 1], ball_ih_s2[p2s:p3e + 1], th=th)
 
 
@@ -399,13 +405,13 @@ class FeaturesExtractor:
 
 
 
-            joint_attention_list_p23[i] = joint_attention_feature_p23
+            joint_attention_list[i] = joint_attention_feature
 
             i += 1
 
         features_summary = {
 
-            "joint_attention_p23": joint_attention_list_p23,
+            "joint_attention": joint_attention_list,
 
 
         }
@@ -549,7 +555,7 @@ class FeaturesExtractor:
 
             # if there is too less sample, start of forward swing - 2
             if sample_forward - start_idx < n_window:
-                fs_idx -= 2
+                fs_idx -= (n_window - (sample_forward - start_idx))
                 start_idx = e[2] + fs_idx
 
 
@@ -688,7 +694,7 @@ class FeaturesExtractor:
         }
         return features_summary
 
-    def distanceDoubleHit(self, episode, ref, xy=True):
+    def distanceDoubleHit(self, episode, ref, xy=True, n_window=10):
         '''
         Compute the relative angle between me and my partner before the impact
 
@@ -701,19 +707,20 @@ class FeaturesExtractor:
         i=0
         for e in episode:
 
-            hit_idx = e[1]
-            my_position = self.p.lower_back_segment_T [hit_idx-5:hit_idx+5] - self.tw.wall_segment
-            partner_position = ref.p.lower_back_segment_T[hit_idx-5:hit_idx+5] - self.tw.wall_segment
+            impact_idx = e[1]
+            my_position = self.p.lower_back_segment_T [impact_idx-n_window:impact_idx] - self.tw.table_segment
+            partner_position = ref.p.lower_back_segment_T[impact_idx-n_window:impact_idx] - self.tw.table_segment
 
             if xy:
                 my_position = my_position[:, [0, 1]]
                 partner_position = partner_position[:, [0, 1]]
-            features[i] = np.average(np.abs(np.diff(computeSegmentAngles(my_position, partner_position), axis=0)))
+            # features[i] = np.average(np.abs(np.diff(computeSegmentAngles(my_position, partner_position), axis=0)))
+            features[i] = np.average(np.abs(np.diff(np.linalg.norm(my_position - partner_position, axis=-1), axis=0)))
             i +=1
 
         return features
 
-    def bouncingPoint(self, all_episode, episode, centro=None):
+    def bouncingPoint(self, all_episode, episode, ref=None):
         '''
         Compute the relative position of bouncing position on the wall to the top wall  in X and Z axis
         return x, z point of bouncing points
@@ -728,24 +735,31 @@ class FeaturesExtractor:
 
         all_bouncing_idx = all_episode[:, 2]
         all_bouncing_position = self.b.ball_t[all_bouncing_idx]
-        if centro is None:
-            centro_bouncing_post = np.mean(all_bouncing_position, axis=0, keepdims=True)
+
+
+        if ref is None:
+            ref = np.mean(all_bouncing_position, axis=0, keepdims=True)
         else:
-            centro_bouncing_post = centro
+            ref = ref
 
         bouncing_idx = episode[:, 2]
         bouncing_position = self.b.ball_t[bouncing_idx]
 
 
-        bouncing_position = np.linalg.norm(centro_bouncing_post[:, [0, 2]] - bouncing_position[:, [0, 2]], axis=-1 , keepdims=True)
+        ref = ref[bouncing_idx]
+        myself = self.p.lower_back_segment_T[bouncing_idx]
 
+        a = np.linalg.norm(ref[:, [0, 2]] - bouncing_position[:, [0, 2]], axis=-1 , keepdims=True)
+        b =  np.linalg.norm(myself[:, [0, 2]] - bouncing_position[:, [0, 2]], axis=-1 , keepdims=True)
+
+        bouncing_position = a / b
         features_summary = {
             "bouncing_position": bouncing_position
         }
         return features_summary
 
 
-    def impactPoint(self, episode):
+    def impactPoint(self, episode, ref=None):
         '''
         How much the racket move to compensate error?
         Compute the relative distnace between racket and individuals' lower back at the impact time. Compensation often requires individuals to stretch their body
@@ -758,10 +772,24 @@ class FeaturesExtractor:
 
         impact_idx = episode[:, 1]
         racket_impact_position = self.p.racket_segment_T[impact_idx]
-        lower_impact_position = self.p.lower_back_segment_T[impact_idx]
+
+        table_segment = self.p.lower_back_segment_T[impact_idx]
+
+        root_impact_position = self.p.root_segment_T[impact_idx]
+
+        r_humerus_impact_position = self.p.rhummer_segment_T[impact_idx] - racket_impact_position
+
+        l_humerus_impact_position = self.p.lhummer_segment_T[impact_idx] - racket_impact_position
 
 
-        dist_to_centro =  np.linalg.norm(racket_impact_position - lower_impact_position, axis=-1, keepdims=True)
+
+        if self.p.hand == "R":
+            b = np.linalg.norm(racket_impact_position - l_humerus_impact_position, axis=-1, keepdims=True)
+        else:
+            b = np.linalg.norm(racket_impact_position - r_humerus_impact_position, axis=-1, keepdims=True)
+
+
+        dist_to_centro = b
 
         features_summary = {
             "impact_position": dist_to_centro

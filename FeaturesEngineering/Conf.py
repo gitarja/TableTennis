@@ -43,10 +43,7 @@ double_features_col = [
     "hitter_pr_p3_stability",
 
     # Joint attention
-    "ja_p23_minDu",
-    "ja_p23_maxDu",
-    "ja_p23_avgDu",
-    "ja_p23_percentage",
+    "ja_percentage",
 
 
 
@@ -70,8 +67,8 @@ double_features_col = [
 
 
 
+    "receiver",
     "hitter",
-    "observer",
     "pair_idx",
     "episode_label",
     "observation_label",
@@ -124,10 +121,7 @@ double_features_col_num = [
     "hitter_pr_p3_stability",
 
     # Joint attention
-    "ja_p23_minDu",
-    "ja_p23_maxDu",
-    "ja_p23_avgDu",
-    "ja_p23_percentage",
+    "ja_percentage",
 
 
 
@@ -151,8 +145,8 @@ double_features_col_num = [
 
 
 
+    "receiver",
     "hitter",
-    "observer",
     "pair_idx",
     "episode_label",
     "observation_label",
@@ -195,7 +189,7 @@ single_features_col = [
     "im_rack_wrist_dist",
 
     #bouncing point
-    "bouncing_point_to_cent",
+    "hit_to_bouncing_point",
 
 
     'episode_label', 'observation_label', 'success'
@@ -230,7 +224,7 @@ single_features_col_num = [
     "im_rack_wrist_dist",
 
     # bouncing point
-    "bouncing_point_to_cent",
+    "hit_to_bouncing_point",
 
     'episode_label', 'observation_label', 'success'
 

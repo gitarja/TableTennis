@@ -55,7 +55,7 @@ class SingleFeaturesExtractor(FeaturesExtractor):
         success_fs = self.startForwardSwing(self.b.success_idx)
         success_start_fs = success_fs["start_fs"][:, 0] if len(self.b.success_idx) == 1 else success_fs[
             "start_fs"].squeeze()
-        success_bouncing_point = self.bouncingPoint(self.b.all_episodes, self.b.success_idx)
+        success_bouncing_point = self.bouncingPoint(self.b.all_episodes, self.b.success_idx, centro=self.tw.wall_top)
         success_mag_fs = self.speedACCForwardSwing(self.b.success_idx, success_start_fs)
         success_mag_impact = self.speedACCBeforeImpact(self.b.success_idx)
 
@@ -81,7 +81,7 @@ class SingleFeaturesExtractor(FeaturesExtractor):
             failures_fs = self.startForwardSwing(self.b.failures_idx)
             failure_start_fs = failures_fs["start_fs"][:, 0] if len(self.b.failures_idx) == 1 else failures_fs[
                 "start_fs"].squeeze()
-            failures_bouncing_point = self.bouncingPoint(self.b.all_episodes, self.b.failures_idx)
+            failures_bouncing_point = self.bouncingPoint(self.b.all_episodes, self.b.failures_idx, centro=self.tw.wall_top)
             failures_mag_fs = self.speedACCForwardSwing(self.b.failures_idx, failure_start_fs)
             failures_mag_impact = self.speedACCBeforeImpact(self.b.failures_idx)
             failures_features = np.hstack([
@@ -151,10 +151,14 @@ class DoubleFeaturesExtractor():
         hit_ball_impact1 = self.b.ball_t[self.b.success_idx[:, 0]]
         hit_ball_impact2 = self.b.ball_t[self.b.success_idx[:, 1]]
 
-        r1 = self.s1.p.racket_segment_T[self.b.success_idx[:, 1]]
-        r2 = self.s2.p.racket_segment_T[self.b.success_idx[:, 1]]
+        # first impact
         r11 = self.s1.p.racket_segment_T[self.b.success_idx[:, 0]]
         r12 = self.s2.p.racket_segment_T[self.b.success_idx[:, 0]]
+
+        # second impact
+        r1 = self.s1.p.racket_segment_T[self.b.success_idx[:, 1]]
+        r2 = self.s2.p.racket_segment_T[self.b.success_idx[:, 1]]
+
 
         receiver_success_idx = np.argmin(np.array(
             [np.linalg.norm(hit_ball_impact2 - r1, axis=-1), np.linalg.norm(hit_ball_impact2 - r2, axis=-1)]).T,
@@ -272,9 +276,9 @@ class DoubleFeaturesExtractor():
                                                                                       self.b.failures_idx)
         # success gaze events
         s1_success_gaze, s1_success_p1on, s1_success_p2on = self.extractGazeFeatures(self.s1, self.b.success_idx,
-                                                                                     saccade_normalize)
+                                                                                     saccade_normalize, iam_idx=0)
         s2_success_gaze, s2_success_p1on, s2_success_p2on = self.extractGazeFeatures(self.s2, self.b.success_idx,
-                                                                                     saccade_normalize)
+                                                                                     saccade_normalize, iam_idx=1)
 
         receiver_success_gaze, hitter_success_gaze = self.selectReceiverFeatures(self.b.success_idx, np.array(
             [s1_success_gaze, s2_success_gaze]))
@@ -282,8 +286,8 @@ class DoubleFeaturesExtractor():
         # success ball position to root
 
         # success forward swing and impact
-        s1_success_fs_impact = self.extractForwardSwingImpact(self.s1, self.b.success_idx)
-        s2_success_fs_impact = self.extractForwardSwingImpact(self.s2, self.b.success_idx)
+        s1_success_fs_impact = self.extractForwardSwingImpact(self.s1, self.b.success_idx, self.s2)
+        s2_success_fs_impact = self.extractForwardSwingImpact(self.s2, self.b.success_idx, self.s1)
         receiver_success_fs_impact, _ = self.selectReceiverFeatures(self.b.success_idx,
                                                                 np.array([s1_success_fs_impact, s2_success_fs_impact]))
 
@@ -295,7 +299,7 @@ class DoubleFeaturesExtractor():
 
         features = np.hstack([receiver_success_gaze,
                               hitter_success_gaze,
-                              joint_attention_success["joint_attention_p23"],
+                              joint_attention_success["joint_attention"],
                               receiver_success_fs_impact,
                               self.b.success_idx[:, 6:]
 
@@ -304,9 +308,9 @@ class DoubleFeaturesExtractor():
         if len(self.b.failures_idx):
             # failures gaze events
             s1_failure_gaze, s1_failures_p1on, s1_failures_p2on = self.extractGazeFeatures(self.s1, self.b.failures_idx,
-                                                                                           saccade_normalize)
+                                                                                           saccade_normalize, iam_idx=0)
             s2_failure_gaze, s2_failures_p1on, s2_failures_p2on = self.extractGazeFeatures(self.s2, self.b.failures_idx,
-                                                                                           saccade_normalize)
+                                                                                           saccade_normalize, iam_idx=1)
 
 
 
@@ -314,8 +318,8 @@ class DoubleFeaturesExtractor():
                 [s1_failure_gaze, s2_failure_gaze]))
 
             # failures forward swing and impact
-            s1_failures_fs_impact = self.extractForwardSwingImpact(self.s1, self.b.failures_idx)
-            s2_failures_fs_impact = self.extractForwardSwingImpact(self.s2, self.b.failures_idx)
+            s1_failures_fs_impact = self.extractForwardSwingImpact(self.s1, self.b.failures_idx, self.s2)
+            s2_failures_fs_impact = self.extractForwardSwingImpact(self.s2, self.b.failures_idx, self.s1)
 
             receiver_failures_fs_impact, _ = self.selectReceiverFeatures(self.b.failures_idx,
                                                                      np.array([s1_failures_fs_impact,
@@ -329,7 +333,7 @@ class DoubleFeaturesExtractor():
             failures_features = np.hstack([
                 receiver_failure_gaze,
                 hitter_failure_gaze,
-                joint_attention_failure["joint_attention_p23"],
+                joint_attention_failure["joint_attention"],
                 receiver_failures_fs_impact,
                 self.b.failures_idx[:, 6:]
 
@@ -342,9 +346,16 @@ class DoubleFeaturesExtractor():
         summary_features = np.hstack([features_sorted, episode_label, observation_label, success_label])
         return summary_features
 
-    def extractGazeFeatures(self, s, episodes, saccade_normalize=False):
+    def extractGazeFeatures(self, s, episodes, saccade_normalize=False, iam_idx=0):
+        '''
+        :param s:
+        :param episodes:
+        :param saccade_normalize:
+        :param iam_idx: i am the first (0) or the second (1) subject
+        :return:
+        '''
         gaze_features = s.detectGazeEvents(episodes, normalize=saccade_normalize, th_angle_p=25,
-                                           fill_in=False)
+                                           fill_in=False, iam_idx=iam_idx, double=True)
 
         features = np.hstack([gaze_features["gaze_event"],
                               gaze_features["saccade_p1"],
@@ -354,19 +365,19 @@ class DoubleFeaturesExtractor():
         return features, np.expand_dims(gaze_features["saccade_p1"][:, 0], -1), np.expand_dims(
             gaze_features["saccade_p2"][:, 0], -1)
 
-    def extractForwardSwingImpact(self, s, episodes):
+    def extractForwardSwingImpact(self, s, episodes, ref):
         # extract subject 1 features
         fs = s.startForwardSwing(episodes)
         start_fs = fs["start_fs"][:, 0] if len(episodes) == 1 else fs[
             "start_fs"].squeeze()
-        mag_fs = s.speedACCForwardSwing(episodes, start_fs, n_window=7)
-        mag_impact = s.speedACCBeforeImpact(episodes)
+        mag_fs = s.speedACCForwardSwing(episodes, start_fs, n_window=5)
+        mag_impact = s.speedACCBeforeImpact(episodes, win_length=3)
 
         # bouncing
-        bouncing_points = s.bouncingPoint(self.b.all_episodes, episodes, centro=s.tw.wall_top)
+        bouncing_points = s.bouncingPoint(self.b.all_episodes, episodes, ref=ref.p.lower_back_segment_T)
 
         # impact
-        impact_points = s.impactPoint(episodes)
+        impact_points = s.impactPoint(episodes, ref=ref)
 
         features = np.hstack([
             fs["start_fs"] * 10,

@@ -61,7 +61,9 @@ class Subject:
 
         # ----------------------------------body-----------------------------
 
-        #
+        # get segments
+
+        # lower back
         self.lower_back_segment_T =  s.filter(regex='LowerBack_T').values
         # wrist
         self.rwirst_segment_T = s.filter(regex='R_Wrist_T').values
@@ -71,27 +73,44 @@ class Subject:
         self.rcollar_segment_T = s.filter(regex='R_Collar_T').values
         self.lcollar_segment_T = s.filter(regex='L_Collar_T').values
 
+        # hummer
         self.rhummer_segment_T = s.filter(regex='R_Humerus_T').values
-        self.relbow_segment_T = s.filter(regex='R_Elbow_T').values
+        self.lhummer_segment_T = s.filter(regex='L_Humerus_T').values
 
+        # tobii
         self.tobii_segment_T = s.filter(regex='TobiiGlass_T').values
-        self.tobii_segment_R = s.filter(regex='TobiiGlass_R').values
 
-        # get segments
+
+        # elbow
+        self.relbow_segment_T = s.filter(regex='R_Elbow_T').values
+        self.lelbow_segment_T = s.filter(regex='L_Elbow_T').values
+
         self.root_segment_T = s.filter(regex='Root_T').values
+
+        # get rotation segments
+
+        # lower back
+        self.lower_back_segment_R = s.filter(regex='LowerBack_R').values
         # wrist
-        self.rwirst_segment_T = s.filter(regex='R_Wrist_T').values
-        self.lwirst_segment_T = s.filter(regex='L_Wrist_T').values
+        self.rwirst_segment_R = s.filter(regex='R_Wrist_R').values
+        self.lwirst_segment_R = s.filter(regex='L_Wrist_R').values
 
         # colar
-        self.rcollar_segment_T = s.filter(regex='R_Collar_T').values
-        self.lcollar_segment_T = s.filter(regex='L_Collar_T').values
+        self.rcollar_segment_R = s.filter(regex='R_Collar_R').values
+        self.lcollar_segment_R = s.filter(regex='L_Collar_R').values
 
-        self.rhummer_segment_T = s.filter(regex='R_Humerus_T').values
-        self.relbow_segment_T = s.filter(regex='R_Elbow_T').values
+        # hummer
+        self.rhummer_segment_R = s.filter(regex='R_Humerus_R').values
+        self.lhummer_segment_R = s.filter(regex='L_Humerus_R').values
 
-        self.tobii_segment_T = s.filter(regex='TobiiGlass_T').values
+        # tobii
         self.tobii_segment_R = s.filter(regex='TobiiGlass_R').values
+
+        # elbow
+        self.relbow_segment_R = s.filter(regex='R_Elbow_R').values
+        self.lelbow_segment_R = s.filter(regex='L_Elbow_R').values
+
+        self.root_segment_R = s.filter(regex='Root_R').values
 
         # ----------------------------------racket-----------------------------
         self.racket_segment_T = r.filter(regex='pt_T').values
